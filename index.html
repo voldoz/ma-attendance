@@ -260,6 +260,7 @@ td .pentag{margin-inline-start:0;margin-top:2px;display:inline-flex}
 .note[hidden]{display:none}
 .card.lead{display:block;padding:12px}.card.lead .swrow{margin-top:8px}.card.lead .lperm{margin-top:6px;font-size:11.5px;line-height:1.6}
 .sched .cedit{cursor:pointer;font:inherit;text-align:inherit}.sched .cedit:hover{outline:2px solid #9DB6DD;outline-offset:-2px}
+.scls{display:block;font-size:10.5px;font-weight:700;color:#6B3FA0;margin-top:1px}
 </style>
 </head>
 <body>
@@ -707,6 +708,7 @@ const DEPT_SHORT = { edu: 'تربية', voice: 'أصوات', orch: 'آلات', a
 const sessById = (id) => S.sessions.find((x) => x.id === id) || (S.archived || []).find((x) => x.id === id);
 const classById = (id) => S.classes.find((c) => c.id === id) || { name: '—', inst: 0 };
 const deptById = (id) => S.depts.find((d) => d.id === id) || { name: '—', subjects: [], specs: [] };
+const soloCls = (s) => { if (!s || s.type !== 'solo') return ''; const st = userById(s.studentId); const c = st && classById(st.classId); return c && c.name ? `<small class="scls">${esc(c.name)}</small>` : ''; };
 const targetName = (s) => s.type === 'solo' ? 'فردي: ' + ((userById(s.studentId) || {}).name || '—') : 'فصل ' + classById(s.classId).name + (s.depts && s.depts.length ? ' · ' + s.depts.map((d) => DEPT_SHORT[d] || d).join('، ') : '') + (s.grp ? ' · مج ' + s.grp : '') + (s.stuIds && s.stuIds.length ? ' · مجموعة (' + s.stuIds.length + ' طلاب)' : '');
 const teaches = (u) => !!u && (u.role === 'teacher' || !!u.teaches);
 const sessionsForStudent = (stu) => S.sessions.filter((s) => (s.type === 'solo' && s.studentId === stu.id) || (s.type === 'group' && (s.stuIds && s.stuIds.length ? s.stuIds.includes(stu.id) : (s.classId === stu.classId && (!s.depts || !s.depts.length || s.depts.includes(stu.deptId))))));
@@ -943,7 +945,7 @@ SCREENS.lessons = () => {
   ${UI.loc === 'deny' ? `<div class="note bad">إذن الموقع مرفوض على هذا الجوال، فلن تستطيع تسجيل الغياب.</div>` : ''}
   ${ss.length ? ss.map((s) => { const ls = lessonState(s, n.d); const p = per(s.p); const open = ls === 'open' || ls === 'open-done';
     const lab = ls === 'open' ? 'الآن · يُغلق ' + t12(p.e) : L[ls][0];
-    const inner = `<div class="pnum"><small>المحاضرة</small><b>${s.p}</b></div><div class="grow"><b>${esc(s.subject)} — ${esc(targetName(s))}</b><small>${esc(t12(p.s))} – ${esc(t12(p.e))}</small></div>${pill(lab, L[ls][1])}`;
+    const inner = `<div class="pnum"><small>المحاضرة</small><b>${s.p}</b></div><div class="grow"><b>${esc(s.subject)} — ${esc(targetName(s))}</b>${soloCls(s)}<small>${esc(t12(p.s))} – ${esc(t12(p.e))}</small></div>${pill(lab, L[ls][1])}`;
     return open ? `<button class="card lesson open" onclick="A.go('take',{sid:'${s.id}'})">${inner}</button>` : `<div class="card lesson${ls === 'future' ? ' dim' : ''}">${inner}</div>`; }).join('') : empty('لا توجد لديك محاضرات في هذا اليوم.')}
   <p class="hint">يُفتح تسجيل الغياب مع بداية المحاضرة ويُغلق بانتهائها، ولا يمكن التسجيل بأثر رجعي.</p></main>`;
 };
@@ -982,7 +984,7 @@ function schedGridPlan(u, stu, mine) {
     PERIODS.forEach((p) => {
       if (p.brk) { h += '<div class="brk"></div>'; return; }
       const t = mine.filter((x) => x.day === d && x.p === p.n); const s = sl.filter((x) => x.day === d && x.p === p.n && !isMineS(x, u.id));
-      if (t.length) { h += `<button class="c ${t[0].type === 'solo' ? 's' : 'g'}" onclick="A.modal({type:'mine',sid:'${t[0].id}'})"><b>${esc(t[0].subject)}</b><span>${esc(targetName(t[0]))}</span><small class="pbusy">محاضرتك</small></button>`; return; }
+      if (t.length) { h += `<button class="c ${t[0].type === 'solo' ? 's' : 'g'}" onclick="A.modal({type:'mine',sid:'${t[0].id}'})"><b>${esc(t[0].subject)}</b><span>${esc(targetName(t[0]))}</span>${soloCls(t[0])}<small class="pbusy">محاضرتك</small></button>`; return; }
       if (s.length) { h += `<div class="c pstu"><b>${esc(s[0].subject)}</b><span>${esc(teacherNames(s[0]))}</span><small class="pbusy">محاضرة الطالب</small></div>`; return; }
       if (p.n > maxP) { h += '<div class="c"></div>'; return; }
       free++; h += `<button class="c pfree" onclick="A.cellFor(${d},${p.n},'${stu.id}')" aria-label="إضافة درس ${DAYS[d]} المحاضرة ${p.n}">${ic('plus', 14)}<b>شاغر</b></button>`;
@@ -1523,7 +1525,7 @@ function specCells(list, print, editable) {
       while (i < R) {
         const key = keys[i].map((s) => s.id).join(','); let n = 1; while (i + n < R && keys[i + n].map((s) => s.id).join(',') === key) n++;
         const ss = keys[i];
-        const body = ss.map((s) => `<b>${esc(s.subject)}${s.grp ? ' <small class="spg">(مج ' + esc(s.grp) + ')</small>' : ''}</b><small>${esc(s.type === 'solo' ? targetName(s) : teacherNames(s))}</small>`).join(print ? '<i class="gsep"></i>' : '<hr>');
+        const body = ss.map((s) => `<b>${esc(s.subject)}${s.grp ? ' <small class="spg">(مج ' + esc(s.grp) + ')</small>' : ''}</b><small>${esc(s.type === 'solo' ? targetName(s) : teacherNames(s))}</small>${soloCls(s)}`).join(print ? '<i class="gsep"></i>' : '<hr>');
         const cls = print ? 'gc' + (ss.length ? '' : ' azf') : 'c' + (ss.length ? (ss.every((s) => s.type === 'solo') ? ' s' : ' g') : ' azf');
         const tagN = editable ? 'button' : 'div'; const clk = editable ? ` onclick="A.ccell(${d},${p.n},'${SPEC_ROWS[i][0]}')" aria-label="${DAYS[d]} المحاضرة ${p.n} · ${esc(SPEC_ROWS[i][1])}"` : '';
         h += `<${tagN} class="${cls}${editable ? ' cedit' : ''}" style="grid-row:${r + i}/span ${n};grid-column:${col}"${clk}>${ss.length ? body : '<b>عزف</b>'}</${tagN}>`;
@@ -1554,7 +1556,7 @@ function schedGrid(list, opts) {
         const tag = s.type === 'group' && ((s.depts && s.depts.length) || s.grp) ? `<small class="spec">${esc([(s.depts || []).map((x) => DEPT_SHORT[x] || x).join('، '), s.grp ? 'مج ' + s.grp : ''].filter(Boolean).join(' · '))}</small>` : '';
         inner += (k ? '<hr>' : '');
         if (opts.who === 'teacher') inner += `<b>${esc(s.subject)}</b>${tag}<span>${tDot}${esc(teacherNames(s))}</span>`;
-        else { const sd = live && s.type === 'solo' ? studentDot(userById(s.studentId), s, n.d) : null; inner += `<b>${esc(s.subject)}</b><span>${sd ? `<i class="dot" style="background:${sd}"></i>` : ''}${esc(targetName(s))}</span>`; }
+        else { const sd = live && s.type === 'solo' ? studentDot(userById(s.studentId), s, n.d) : null; inner += `<b>${esc(s.subject)}</b><span>${sd ? `<i class="dot" style="background:${sd}"></i>` : ''}${esc(targetName(s))}</span>${soloCls(s)}`; }
       });
       const cls = 'c' + (s ? (s.type === 'solo' ? ' s' : ' g') : opts.azf && p.n <= opts.azf ? ' azf' : '');
       if (!s && opts.azf && p.n <= opts.azf && !opts.edit) inner = '<b>عزف</b>';
@@ -1598,7 +1600,7 @@ SCREENS.ttprint = (p) => {
   const isT = p.mode === 'teacher'; const isS = p.mode === 'student'; const t = isT ? userById(p.id) : null; const stu = isS ? userById(p.id) : null; const c = isT ? null : classById(isS ? stu.classId : p.id);
   let list; if (isT) list = S.sessions.filter((s) => isMineS(s, p.id)); else if (isS) list = sessionsForStudent(stu); else { const ids = S.users.filter((x) => x.classId === p.id).map((x) => x.id); list = S.sessions.filter((s) => s.classId === p.id || ids.includes(s.studentId)); }
   let grid = '<div class="ff-grid"><div class="hh">المحاضرات</div>' + PERIODS.map((x) => `<div class="hh">${x.brk ? 'راحة' : x.n}</div>`).join('') + '<div class="hh2">التوقيت</div>' + PERIODS.map((x) => `<div class="tm" dir="ltr">${esc(t12(x.s).replace(/ [صم]/, ''))}<br>${esc(t12(x.e).replace(/ [صم]/, ''))}</div>`).join('');
-  for (let d = 0; d < 5; d++) { grid += `<div class="hh2">${DAYS[d]}</div>`; PERIODS.forEach((x) => { if (x.brk) { grid += '<div class="gb"></div>'; return; } const ss = list.filter((y) => y.day === d && y.p === x.n); const az = !isT && !isS && !ss.length && x.n <= (c.inst === 1 ? 7 : 8); grid += `<div class="gc${az ? ' azf' : ''}">${az ? '<b>عزف</b>' : ''}${ss.map((s) => `<b>${esc(s.subject)}</b><small>${esc(isT ? targetName(s) : teacherNames(s) + (s.depts && s.depts.length ? ' · ' + s.depts.map((q) => DEPT_SHORT[q]).join('، ') : '') + (s.grp ? ' · مج ' + s.grp : ''))}</small>`).join('<i class="gsep"></i>')}</div>`; }); }
+  for (let d = 0; d < 5; d++) { grid += `<div class="hh2">${DAYS[d]}</div>`; PERIODS.forEach((x) => { if (x.brk) { grid += '<div class="gb"></div>'; return; } const ss = list.filter((y) => y.day === d && y.p === x.n); const az = !isT && !isS && !ss.length && x.n <= (c.inst === 1 ? 7 : 8); grid += `<div class="gc${az ? ' azf' : ''}">${az ? '<b>عزف</b>' : ''}${ss.map((s) => `<b>${esc(s.subject)}</b><small>${esc(isT ? targetName(s) : teacherNames(s) + (s.depts && s.depts.length ? ' · ' + s.depts.map((q) => DEPT_SHORT[q]).join('، ') : '') + (s.grp ? ' · مج ' + s.grp : ''))}</small>${isT ? soloCls(s) : ''}`).join('<i class="gsep"></i>')}</div>`; }); }
   grid += '</div>';
   if (!isT && !isS && c.inst === 0) { grid = '<div class="ff-grid spec5"><div class="hh" style="grid-row:1;grid-column:1">المحاضرات</div><div class="hh" style="grid-row:1;grid-column:2">التخصصات</div>' + PERIODS.map((x, j) => `<div class="hh" style="grid-row:1;grid-column:${3 + j}">${x.brk ? 'راحة' : x.n}</div>`).join('') + '<div class="hh2" style="grid-row:2;grid-column:1/span 2">التوقيت</div>' + PERIODS.map((x, j) => `<div class="tm" style="grid-row:2;grid-column:${3 + j}" dir="ltr">${esc(t12(x.s).replace(/ [صم]/, ''))}<br>${esc(t12(x.e).replace(/ [صم]/, ''))}</div>`).join('') + specCells(list.filter((s) => s.type === 'group'), true) + '</div>'; }
   return topBar('معاينة الطباعة', isT ? t.name : isS ? stu.name : 'فصل ' + c.name, { right: `<button class="btn sm" onclick="A.share()">${ic('upload', 16)} مشاركة / PDF</button>` }) + `<main class="pad"><div class="fitbox"><div class="formA4l" data-fit="1123">

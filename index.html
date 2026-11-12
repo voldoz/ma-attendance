@@ -259,6 +259,7 @@ td .pentag{margin-inline-start:0;margin-top:2px;display:inline-flex}
 .bnav.many{justify-content:flex-start;overflow-x:auto;scrollbar-width:none}.bnav.many::-webkit-scrollbar{display:none}.bnav.many button{flex:0 0 auto;min-width:68px;max-width:none}
 .note[hidden]{display:none}
 .card.lead{display:block;padding:12px}.card.lead .swrow{margin-top:8px}.card.lead .lperm{margin-top:6px;font-size:11.5px;line-height:1.6}
+.sched .cedit{cursor:pointer;font:inherit;text-align:inherit}.sched .cedit:hover{outline:2px solid #9DB6DD;outline-offset:-2px}
 </style>
 </head>
 <body>
@@ -1506,7 +1507,7 @@ function specApplies(s, dept) {
   if (s.stuIds && s.stuIds.length) { const us = s.stuIds.map(userById).filter(Boolean); if (!us.some(known)) return true; return us.some((u) => u.deptId === dept); }
   return !s.depts || !s.depts.length || s.depts.includes(dept);
 }
-function specCells(list, print) {
+function specCells(list, print, editable) {
   // returns html of explicitly placed cells for day rows; rows start at row0
   const nP = PERIODS.length; let h = ''; const R = SPEC_ROWS.length; const row0 = print ? 3 : 2;
   for (let d = 0; d < 5; d++) {
@@ -1524,17 +1525,18 @@ function specCells(list, print) {
         const ss = keys[i];
         const body = ss.map((s) => `<b>${esc(s.subject)}${s.grp ? ' <small class="spg">(مج ' + esc(s.grp) + ')</small>' : ''}</b><small>${esc(s.type === 'solo' ? targetName(s) : teacherNames(s))}</small>`).join(print ? '<i class="gsep"></i>' : '<hr>');
         const cls = print ? 'gc' + (ss.length ? '' : ' azf') : 'c' + (ss.length ? (ss.every((s) => s.type === 'solo') ? ' s' : ' g') : ' azf');
-        h += `<div class="${cls}" style="grid-row:${r + i}/span ${n};grid-column:${col}">${ss.length ? body : '<b>عزف</b>'}</div>`;
+        const tagN = editable ? 'button' : 'div'; const clk = editable ? ` onclick="A.ccell(${d},${p.n},'${SPEC_ROWS[i][0]}')" aria-label="${DAYS[d]} المحاضرة ${p.n} · ${esc(SPEC_ROWS[i][1])}"` : '';
+        h += `<${tagN} class="${cls}${editable ? ' cedit' : ''}" style="grid-row:${r + i}/span ${n};grid-column:${col}"${clk}>${ss.length ? body : '<b>عزف</b>'}</${tagN}>`;
         i += n;
       }
     });
   }
   return h;
 }
-function schedGridSpec(list) {
+function schedGridSpec(list, editable) {
   let h = '<div class="schedbox"><div class="sched spec5"><div class="h" style="grid-row:1;grid-column:1">المحاضرات</div><div class="h" style="grid-row:1;grid-column:2">التخصصات</div>';
   PERIODS.forEach((p, j) => { h += `<div class="h" style="grid-row:1;grid-column:${3 + j}">${p.brk ? 'راحة' : p.n}<small>${p.brk ? '' : esc(p.s)}</small></div>`; });
-  return h + specCells(list, false) + '</div></div>';
+  return h + specCells(list, false, editable) + '</div></div>';
 }
 function schedGrid(list, opts) {
   const n = nowInfo();
@@ -1556,7 +1558,7 @@ function schedGrid(list, opts) {
       });
       const cls = 'c' + (s ? (s.type === 'solo' ? ' s' : ' g') : opts.azf && p.n <= opts.azf ? ' azf' : '');
       if (!s && opts.azf && p.n <= opts.azf && !opts.edit) inner = '<b>عزف</b>';
-      h += opts.edit ? `<button class="${cls}" onclick="A.cell(${d},${p.n})" aria-label="${DAYS[d]} المحاضرة ${p.n}">${inner}</button>` : (opts.addMine && !s) ? `<button class="${cls} addc" onclick="A.cellMine(${d},${p.n})" aria-label="إضافة محاضرة ${DAYS[d]} المحاضرة ${p.n}">${ic('plus', 16)}</button>` : (opts.addMine && s) ? `<button class="${cls}${d === n.day && ['open', 'open-done'].includes(lessonState(s, n.d)) ? ' live' : ''}" onclick="A.modal({type:'mine',sid:'${s.id}'})" aria-label="${DAYS[d]} المحاضرة ${p.n}: ${esc(s.subject)}">${inner}${d === n.day && ['open', 'open-done'].includes(lessonState(s, n.d)) ? '<em>سجّل الغياب</em>' : ''}</button>` : `<div class="${cls}">${inner}</div>`;
+      h += opts.cedit ? `<button class="${cls} cedit" onclick="A.ccell(${d},${p.n},null)" aria-label="${DAYS[d]} المحاضرة ${p.n}">${inner || ic('plus', 14)}</button>` : opts.edit ? `<button class="${cls}" onclick="A.cell(${d},${p.n})" aria-label="${DAYS[d]} المحاضرة ${p.n}">${inner}</button>` : (opts.addMine && !s) ? `<button class="${cls} addc" onclick="A.cellMine(${d},${p.n})" aria-label="إضافة محاضرة ${DAYS[d]} المحاضرة ${p.n}">${ic('plus', 16)}</button>` : (opts.addMine && s) ? `<button class="${cls}${d === n.day && ['open', 'open-done'].includes(lessonState(s, n.d)) ? ' live' : ''}" onclick="A.modal({type:'mine',sid:'${s.id}'})" aria-label="${DAYS[d]} المحاضرة ${p.n}: ${esc(s.subject)}">${inner}${d === n.day && ['open', 'open-done'].includes(lessonState(s, n.d)) ? '<em>سجّل الغياب</em>' : ''}</button>` : `<div class="${cls}">${inner}</div>`;
     });
   }
   return h + `</div></div><div class="legend"><span><i class="dot" style="background:#1E9E5A"></i>حاضر وداخل المعهد</span><span><i class="dot" style="background:#D2372C"></i>غائب أو خارج المعهد</span><span><i class="dot" style="background:#B4BCC7"></i>لم تبدأ</span><span>${pill('جماعية', 'info')} ${pill('فردية', 'med')}</span></div>`;
@@ -1589,8 +1591,8 @@ SCREENS.schedule = () => {
   }
   return head + `<main class="pad">${modes}
   <div class="row wrap" style="gap:8px;margin:12px 0">${picker}<span class="grow"></span><button class="btn ghost sm" onclick="A.go('ttprint',{mode:'${mode}',id:'${pid}'})">${ic('print', 16)} طباعة الجدول</button></div>
-  <h2 class="sec" style="margin-bottom:4px">${esc(title)}</h2>${info}<small class="quiet block" style="margin-bottom:8px">${edit ? 'اضغط على أي خانة لإضافة محاضرة أو تعديلها.' : mode === 'student' ? 'يشمل محاضرات فصله الجماعية ودروسه الفردية · عرض فقط.' : 'عرض فقط · التعديل للمدير ولرئيس القسم على قسمه.'}</small>
-  ${mode === 'class' && classById(cid).inst === 0 && list.length ? schedGridSpec(list) : list.length || edit ? schedGrid(list, { edit, who: mode === 'teacher' ? 'target' : 'teacher', azf: mode === 'class' ? (classById(cid).inst === 1 ? 7 : 8) : 0 }) : empty('لا توجد محاضرات في هذا الجدول بعد.')}</main>`;
+  <h2 class="sec" style="margin-bottom:4px">${esc(title)}</h2>${info}<small class="quiet block" style="margin-bottom:8px">${edit ? 'اضغط على أي خانة لإضافة محاضرة أو تعديلها.' : mode === 'class' && (u.role === 'admin' || u.role === 'head') ? 'يظهر هنا كل ما يدرسه الفصل. التعديل من هنا أو من جدول المعلم.' : mode === 'student' ? 'يشمل محاضرات فصله الجماعية ودروسه الفردية · عرض فقط.' : 'عرض فقط · التعديل للمدير ولرئيس القسم على قسمه.'}</small>
+  ${mode === 'class' && (u.role === 'admin' || u.role === 'head') ? `<div class="note info" style="margin:8px 0">${ic('plus', 16)} اضغط على أي خانة لإضافة محاضرة لهذا الفصل أو تعديلها أو حذفها${u.role === 'head' ? ' (لمعلمي قسمك)' : ''}.</div>` : ''}${mode === 'class' && classById(cid).inst === 0 && (list.length || u.role === 'admin' || u.role === 'head') ? schedGridSpec(list, u.role === 'admin' || u.role === 'head') : list.length || edit || (mode === 'class' && (u.role === 'admin' || u.role === 'head')) ? schedGrid(list, { edit, cedit: mode === 'class' && (u.role === 'admin' || u.role === 'head'), who: mode === 'teacher' ? 'target' : 'teacher', azf: mode === 'class' ? (classById(cid).inst === 1 ? 7 : 8) : 0 }) : empty('لا توجد محاضرات في هذا الجدول بعد.')}</main>`;
 };
 SCREENS.ttprint = (p) => {
   const isT = p.mode === 'teacher'; const isS = p.mode === 'student'; const t = isT ? userById(p.id) : null; const stu = isS ? userById(p.id) : null; const c = isT ? null : classById(isS ? stu.classId : p.id);
@@ -1742,9 +1744,9 @@ function assignLeadModal() { const m = UI.modal; const roles = [['head', 'رئي
   <button class="btn big" onclick="A.assignLead()">متابعة</button>`; }
 SCREENS.users = () => {
   const f = UI.f; const q = (f.q || '').trim();
-  if ((f.utab || 'lead') === 'lead') return topBar('المستخدمون', S.users.length + ' حسابًا') + `<main class="pad">${seg([['lead', 'القيادات والصلاحيات'], ['all', 'كل الحسابات']], 'lead', "A.setF('utab',")}<div style="height:10px"></div>${leadersHtml()}</main>`;
+  if ((f.utab || 'lead') === 'lead') return topBar('المستخدمون', S.users.length + ' حسابًا') + `<main class="pad">${seg([['lead', 'القيادات والصلاحيات'], ['all', 'كل الحسابات']], 'lead', 'A.utab')}<div style="height:10px"></div>${leadersHtml()}</main>`;
   const list = S.users.filter((u) => !q || u.name.includes(q) || u.code.toLowerCase().includes(q.toLowerCase()));
-  return topBar('المستخدمون', S.users.length + ' حسابًا') + `<main class="pad">${seg([['lead', 'القيادات والصلاحيات'], ['all', 'كل الحسابات']], 'all', "A.setF('utab',")}<div style="height:10px"></div>
+  return topBar('المستخدمون', S.users.length + ' حسابًا') + `<main class="pad">${seg([['lead', 'القيادات والصلاحيات'], ['all', 'كل الحسابات']], 'all', 'A.utab')}<div style="height:10px"></div>
   <div class="grid2b"><button class="btn" onclick="A.modal({type:'addUser',role:'supervisor',sub:[]})">${ic('plus', 16)} إضافة حساب</button><button class="btn ghost" onclick="A.toast('في النسخة الحقيقية ترفع ملف Excel بالأسماء ثم توزّعهم.')">${ic('upload', 16)} رفع ملف Excel</button></div>
   <input class="inp full" style="margin:10px 0" placeholder="ابحث بالاسم أو الرقم الأكاديمي" value="${esc(q)}" oninput="A.q(this.value)" aria-label="بحث">
   ${list.map((u) => `<button class="card row" onclick="${teaches(u) ? `A.editTeacher('${u.id}')` : `A.editUser('${u.id}')`}">${avHtml(u)}<div class="grow"><b>${esc(u.name)}</b>${penTag(u)}<small>${esc(u.asst ? 'مساعد مدير' : ROLE[u.role])}${u.teaches ? ' + معلم' : ''} · ${esc(u.deptId ? deptById(u.deptId).name : u.classId ? 'فصل ' + classById(u.classId).name : u.role === 'admin' ? (u.asst ? 'صلاحيات المدير' : 'كامل الصلاحيات') : (u.role === 'sdir' || u.role === 'svdean') ? 'معهد الدراسات الموسيقية' : (u.role === 'dean' || u.role === 'vdean') ? 'المعهدان' : 'المعهد العالي')}${u.subjects && u.subjects.length ? ' · ' + esc(u.subjects.join('، ')) : ''}${u.role === 'student' ? ' · ' + esc([u.deptId ? deptById(u.deptId).name : '', u.status, u.instrument].filter(Boolean).join(' · ')) : ''}</small><small dir="ltr" style="text-align:right;color:#24539F;font-weight:600">${esc(u.code)}</small></div><span style="display:flex;flex-direction:column;gap:4px;align-items:flex-end">${pill(u.active ? 'نشط' : 'معطّل', u.active ? 'ok' : 'mute')}${profileOk(u) ? '' : pill('بيانات ناقصة', 'warn')}</span></button>`).join('')}</main>`;
@@ -1928,6 +1930,22 @@ MODALS.editUser = () => { const m = UI.modal; const u = userById(m.id); return `
   ${u.id !== 'admin' && u.role !== 'student' && me().role === 'admin' ? `<button class="btn ghost big" style="margin-bottom:8px" onclick="A.rolePerm('${u.id}')">${ic('lock', 16)} الفئة والصلاحيات (${esc(u.asst ? 'مساعد مدير' : ROLE[u.role])})</button>` : ''}
   <div class="note bad" id="eerr" hidden></div><button class="btn big" onclick="A.saveEdit()">حفظ</button>`; };
 MODALS.assignLead = assignLeadModal;
+MODALS.ccell = () => { const m = UI.modal; const u = me(); const c = classById(m.cid); const isHigh = c.inst === 0;
+  const here = S.sessions.filter((s) => s.classId === m.cid && s.day === m.d && s.p === m.p && s.type === 'group');
+  const tlist = S.users.filter((x) => teaches(x) && canEditSchedule(u, x)).sort((x, y) => x.name.localeCompare(y.name, 'ar'));
+  const t = userById(m.tid); const subs = [...new Set((t && t.subjects) || [])];
+  const conflict = t ? ccConflict(m) : '';
+  return `<div class="mhead"><div><h2>${esc(c.name)} · ${DAYS[m.d]} — المحاضرة ${m.p}</h2><small class="quiet">${esc(t12(per(m.p).s))} – ${esc(t12(per(m.p).e))}</small></div>${closeBtn}</div>
+  ${here.length ? `<b class="block" style="margin-bottom:6px">المحاضرات في هذه الخانة</b>${here.map((s) => { const ok = canEditSchedule(u, userById(s.teacherId)); return `<div class="card row" style="gap:8px;padding:10px"><div class="grow"><b>${esc(s.subject)}</b><small class="quiet block">${esc(teacherNames(s))}${s.grp ? ' · مج ' + esc(s.grp) : ''}${s.depts && s.depts.length ? ' · ' + esc(s.depts.map((x) => DEPT_SHORT[x] || x).join('، ')) : ' · كل التخصصات'}${s.stuIds ? ' · ' + s.stuIds.length + ' طالب' : ''}</small></div>${ok ? `<button class="iconbtn danger" aria-label="حذف المحاضرة" onclick="A.ccDel('${s.id}')">${ic('x', 18)}</button>` : ''}</div>`; }).join('')}` : '<div class="note mute">لا توجد محاضرة جماعية في هذه الخانة (عزف).</div>'}
+  <h3 class="sec" style="margin:14px 0 6px">إضافة محاضرة</h3>
+  <div class="field"><label for="cct">المعلم</label><select id="cct" onchange="UI.modal.tid=this.value;UI.modal.subject=((userById(this.value)||{}).subjects||[''])[0]||'';render()"><option value="">اختر المعلم</option>${S.depts.map((d) => { const g = tlist.filter((x) => x.deptId === d.id); return g.length ? `<optgroup label="${esc(d.name)}">${g.map((x) => `<option value="${x.id}"${x.id === m.tid ? ' selected' : ''}>${esc(x.name)}</option>`).join('')}</optgroup>` : ''; }).join('')}${tlist.some((x) => !x.deptId) ? `<optgroup label="بدون قسم">${tlist.filter((x) => !x.deptId).map((x) => `<option value="${x.id}"${x.id === m.tid ? ' selected' : ''}>${esc(x.name)}</option>`).join('')}</optgroup>` : ''}</select></div>
+  ${t ? `<div class="field"><label for="ccs">المادة</label>${subs.length ? `<select id="ccs" onchange="UI.modal.subject=this.value">${subs.map((x) => `<option${x === m.subject ? ' selected' : ''}>${esc(x)}</option>`).join('')}</select>` : `<div class="note warn" style="margin:0">لا توجد مواد لهذا المعلم. أضف مواده من الأقسام ← تعديل المعلم.</div>`}</div>
+  ${isHigh ? `<div class="field"><label>التخصصات التي تحضرها</label><div class="chips">${SPEC_ROWS.map(([k, l]) => `<button class="chip${m.depts.includes(k) ? ' on' : ''}" onclick="A.ccDept('${k}')">${m.depts.includes(k) ? ic('check', 12) + ' ' : ''}${esc(l)}</button>`).join('')}</div><small class="quiet">اختر كل التخصصات إذا كانت للفصل كله.</small></div>` : ''}
+  <div class="field"><label for="ccg">المجموعة <small class="quiet">(اختياري)</small></label><select id="ccg" onchange="UI.modal.grp=this.value"><option value="">بدون مجموعة · الكل</option>${['أ', 'ب', 'ج', '1', '2', '3', '4'].map((g) => `<option${g === m.grp ? ' selected' : ''}>${g}</option>`).join('')}</select></div>
+  ${conflict ? `<div class="note bad">${esc(conflict)}</div>` : ''}
+  <button class="btn big" ${conflict || !subs.length ? 'disabled' : ''} onclick="A.ccSave()">إضافة المحاضرة</button>` : ''}`; };
+function ccConflict(m) { const ts = S.sessions.filter((s) => s.day === m.d && s.p === m.p && isMineS(s, m.tid)); if (!ts.length) return '';
+  const s = ts[0]; return 'المعلم لديه في هذا الوقت: ' + s.subject + ' · ' + (s.type === 'solo' ? 'درس فردي' : 'فصل ' + classById(s.classId).name) + (s.classId === m.cid ? ' (يمكن أن تكون مجموعة أخرى؟ احذفها أولًا أو اختر وقتًا آخر)' : ''); }
 MODALS.rolePerm = () => { const m = UI.modal; const u = userById(m.id); const isT = m.role === 'teacher';
   const roles = [['teacher', 'معلم'], ['head', 'رئيس قسم'], ['dean', 'العميد'], ['vdean', 'الوكيل'], ['sdir', 'مدير الثانوي'], ['svdean', 'وكيلة الثانوي'], ['supervisor', 'مشرف فصل'], ['admin', 'مساعد مدير']];
   const holders = ['dean', 'vdean', 'sdir', 'svdean'].includes(m.role) ? S.users.filter((x) => x.role === m.role && x.id !== u.id) : m.role === 'head' ? S.users.filter((x) => x.role === 'head' && x.deptId === m.dept && x.id !== u.id) : [];
@@ -1993,6 +2011,7 @@ const A = {
   modal(m) { UI.modal = m; render(); }, close() { UI.modal = null; render(); },
   toast(t) { UI.toast = t; render(); },
   setF(k, v) { UI.f[k] = v; render(); },
+  utab(v) { UI.f.utab = v; render(); },
   // login
   quick(id) { const u = userById(id); UI.login = { id: u.code, pass: '1234', err: '' }; A.login(); },
   login() {
@@ -2200,7 +2219,7 @@ const A = {
   cset(k, v) { UI.modal[k] = v; render(); }, ckind(v) { UI.modal.kind = v; render(); },
   fixSolo() { const m = UI.modal; const t = userById(m.tid); const sc = soloClasses(t); const cur = userById(m.studentId); if (cur && soloStudents(t, cur.classId).includes(cur)) { m.solocls = cur.classId; return; } const keep = sc.find((c) => c.id === m.solocls); m.solocls = keep ? keep.id : sc[0] && sc[0].id; m.studentId = m.solocls ? soloStudents(t, m.solocls)[0].id : null; },
   saveCell() { const m = UI.modal; if (!m) return; if (!m.subject) { A.toast('اختر المادة أولًا. أضف مواد المعلم من تعديل بياناته.'); return; } if (m.mine) m.kind = 'solo'; if (m.kind === 'solo' && !m.studentId) return; if (findConflict(m)) return; const rec = { id: m.existing || 'x' + rid(), teacherId: m.tid, day: m.d, p: m.p, subject: m.subject, type: m.kind, classId: m.kind === 'group' ? m.classId : null, studentId: m.kind === 'solo' ? m.studentId : null };
-    if (m.existing) S.sessions = S.sessions.map((x) => x.id === m.existing ? rec : x); else S.sessions.push(rec); UI.modal = null;
+    if (m.existing) S.sessions = S.sessions.map((x) => { if (x.id !== m.existing) return x; const keep = rec.type === 'group' && x.type === 'group' && x.classId === rec.classId ? { co: x.co, depts: x.depts, grp: x.grp, stuIds: x.stuIds } : {}; return Object.assign({}, keep, rec); }); else S.sessions.push(rec); UI.modal = null;
     if (m.mine) { const t = userById(m.tid); const to = superiorsOf(t, sessInst(rec)); if (!S.alerts) S.alerts = [];
       S.alerts.push({ id: 'a' + rid(), to, tid: t.id, t: t.name + ' أضاف درسًا فرديًا لجدوله', b: rec.subject + ' · ' + targetName(rec) + ' · ' + DAYS[rec.day] + ' · المحاضرة ' + rec.p + ' (' + t12(per(rec.p).s) + ')', at: fmtD(UI.date) + ' · ' + t12(UI.time), read: {} });
       commit('أُضيفت المحاضرة، ووصل تنبيه إلى ' + to.length + (to.length === 1 ? ' مسؤول.' : ' مسؤولين.')); return; }
@@ -2211,6 +2230,15 @@ const A = {
     if (!name || !subjects.length) { A.toast('اكتب اسم المعلم واختر مادة واحدة على الأقل.'); return; }
     const phone = ((document.getElementById('nt-phone') || {}).value || '').replace(/[^0-9]/g, '').slice(0, 8);
     const code = 'T2026-' + String(S.seq.T++).padStart(4, '0'); S.users.push({ id: 'u' + rid(), code, name, role: 'teacher', deptId, subjects, phone, email: '', active: true }); commit('أُضيف المعلم برقم ' + code + '.'); },
+  ccell(d, p, dept) { const cid = UI.f.scid || (S.classes[0] || {}).id; const c = classById(cid); if (!c) return;
+    UI.modal = { type: 'ccell', cid, d, p, tid: '', subject: '', grp: '', depts: c.inst === 0 && dept ? [dept] : [] }; render(); },
+  ccDept(k) { const m = UI.modal; m.depts = m.depts.includes(k) ? m.depts.filter((x) => x !== k) : m.depts.concat([k]); render(); },
+  ccSave() { const m = UI.modal; const t = userById(m.tid); if (!t || !m.subject || ccConflict(m)) return; if (!canEditSchedule(me(), t)) return;
+    const c = classById(m.cid); const all = c.inst === 0 && m.depts.length && m.depts.length < SPEC_ROWS.length ? m.depts.slice() : null;
+    S.sessions.push({ id: 'x' + rid(), teacherId: t.id, co: [], day: m.d, p: m.p, subject: m.subject, type: 'group', classId: m.cid, studentId: null, depts: all, grp: m.grp || null });
+    UI.modal = null; commit('أُضيفت ' + m.subject + ' لفصل ' + c.name + ' · ' + DAYS[m.d] + ' المحاضرة ' + m.p + '، وظهرت في جدول ' + t.name + '.'); },
+  ccDel(id) { const s = sessById(id); if (!s || !canEditSchedule(me(), userById(s.teacherId))) return; if (!confirm('حذف ' + s.subject + ' من هذه الخانة؟ تبقى سجلات الغياب السابقة محفوظة.')) return;
+    if (Object.keys(S.records).some((k) => k.startsWith(id + '|'))) { S.archived = (S.archived || []).concat([s]); } S.sessions = S.sessions.filter((x) => x.id !== id); render(); commit('حُذفت المحاضرة من الجدول.'); },
   toggleTeach(id) { const u = userById(id); if (!u || u.role === 'teacher' || u.role === 'student') return;
     if (u.teaches) { delete u.teaches; if (u.perms) u.perms = u.perms.filter((k) => k !== 'lessons'); commit(u.name + ': لم يعد يدرّس.' + (S.sessions.some((s) => isMineS(s, u.id)) ? ' تنبيه: ما زالت له محاضرات في الجدول باسمه.' : '')); }
     else { u.teaches = true; u.subjects = u.subjects || []; commit(u.name + ': صار معلمًا أيضًا، وتظهر له صفحة «حصصي».'); } },

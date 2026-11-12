@@ -258,6 +258,7 @@ td .pentag{margin-inline-start:0;margin-top:2px;display:inline-flex}
 .legend .lg{display:inline-block;width:12px;height:12px;border-radius:3px;margin-inline-end:4px;vertical-align:-2px}.legend .lg.pfree{background:#E9F7EF;border:1px dashed #8FD1AC}.legend .lg.g{background:#EEF4FC;border:1px solid #C7D3E6}.legend .lg.pstu{background:#F1F2F4;border:1px solid #D8DCE2}
 .bnav.many{justify-content:flex-start;overflow-x:auto;scrollbar-width:none}.bnav.many::-webkit-scrollbar{display:none}.bnav.many button{flex:0 0 auto;min-width:68px;max-width:none}
 .note[hidden]{display:none}
+.card.lead{display:block;padding:12px}.card.lead .swrow{margin-top:8px}.card.lead .lperm{margin-top:6px;font-size:11.5px;line-height:1.6}
 </style>
 </head>
 <body>
@@ -1721,10 +1722,29 @@ function sigCard(u) {
 }
 SCREENS.myinfo = () => { const u = me(); return topBar('بياناتي', u.code) + `<main class="pad">${infoRows(u)}${teaches(u) ? `<div class="card"><b>موادي</b><small class="quiet block" style="margin-bottom:8px">تستطيع إضافة مادة من أي قسم إذا احتجت لتدريسها، ويصل تنبيه بذلك لرئيس قسمك والإدارة.</small><div class="chips">${(u.subjects || []).map((x) => `<span class="tag t-info" style="padding-left:12px">${esc(x)}</span>`).join('') || '<small class="quiet">لا توجد مواد</small>'}</div><div class="row" style="gap:8px;margin-top:8px">${subjectPicker('my-sub', u.subjects)}<button class="btn sm" onclick="A.selfSubject()">إضافة</button></div></div>` : ''}${photoCard(u)}${sigCard(u)}${contactForm(u, 'حفظ التعديلات')}<p class="hint">لتعديل باقي البيانات راجع إدارة المعهد.</p></main>`; };
 SCREENS.inboxAll = () => topBar('كل الشكاوى', 'للمدير') + `<main class="pad">${S.complaints.slice().reverse().map((c) => complaintCard(c, 'admin')).join('') || empty('لا توجد شكاوى.')}</main>`;
+function leadersHtml() {
+  const order = [['dean', 'العميد'], ['vdean', 'الوكيل'], ['sdir', 'مدير الثانوي'], ['svdean', 'وكيلة الثانوي'], ['head', 'رؤساء الأقسام'], ['asst', 'مساعدو المدير']];
+  const pick = (k) => k === 'asst' ? S.users.filter((u) => u.asst && u.id !== 'admin') : S.users.filter((u) => u.role === k && !u.asst).sort((x, y) => (deptById(x.deptId).name || '').localeCompare(deptById(y.deptId).name || ''));
+  const permTxt = (u) => { if (!PERM_ROLES.includes(u.role)) return 'صلاحيات المدير كاملة'; const ks = u.perms || defaultPerms(u.role, teaches(u)); return (u.perms ? 'مخصّصة: ' : 'الافتراضية: ') + PERM_PAGES.filter((p) => ks.includes(p[0])).map((p) => p[1]).join('، '); };
+  const row = (u) => { const nS = S.sessions.filter((s) => isMineS(s, u.id)).length;
+    return `<div class="card lead"><div class="row" style="gap:10px">${avHtml(u)}<div class="grow"><b>${esc(u.name)}</b><small class="quiet block">${esc(u.role === 'head' ? deptById(u.deptId).name || 'بدون قسم' : u.asst ? 'مساعد مدير' : ROLE[u.role])}${nS ? ' · ' + nS + ' محاضرة في الجدول' : ''}</small></div><button class="btn ghost sm" onclick="A.rolePerm('${u.id}')">${ic('lock', 14)} الصلاحيات</button></div>
+    ${sw(!!u.teaches, `A.toggleTeach('${u.id}')`, 'معلم أيضًا', u.teaches ? 'تظهر له «حصصي» ويسجّل الغياب لطلابه' : 'لا يدرّس حاليًا')}
+    <small class="quiet block lperm">${esc(permTxt(u))}</small></div>`; };
+  const groups = order.map(([k, l]) => { const us = pick(k); return `<h2 class="sec">${esc(l)} <small class="quiet">(${us.length})</small></h2>${us.length ? us.map(row).join('') : `<div class="card quiet" style="text-align:center">لا يوجد. عيّنه من زر «تعيين من المعلمين».</div>`}`; }).join('');
+  return `<button class="btn big" onclick="A.modal({type:'assignLead',role:'head'})">${ic('shield', 16)} تعيين من المعلمين</button>${groups}`;
+}
+function assignLeadModal() { const m = UI.modal; const roles = [['head', 'رئيس قسم'], ['dean', 'العميد'], ['vdean', 'الوكيل'], ['sdir', 'مدير الثانوي'], ['svdean', 'وكيلة الثانوي'], ['admin', 'مساعد مدير']];
+  const ts = S.users.filter((u) => u.role === 'teacher').sort((x, y) => x.name.localeCompare(y.name));
+  return `<div class="mhead"><h2>تعيين من المعلمين</h2>${closeBtn}</div>
+  <div class="field"><label>الفئة</label><div class="rolegrid">${roles.map(([v, l]) => `<button class="${v === m.role ? 'on' : ''}" onclick="UI.modal.role='${v}';render()">${esc(l)}</button>`).join('')}</div></div>
+  <div class="field"><label for="alt">المعلم</label><select id="alt">${S.depts.map((d) => { const g = ts.filter((t) => t.deptId === d.id); return g.length ? `<optgroup label="${esc(d.name)}">${g.map((t) => `<option value="${t.id}">${esc(t.name)}</option>`).join('')}</optgroup>` : ''; }).join('')}${ts.some((t) => !t.deptId) ? `<optgroup label="بدون قسم">${ts.filter((t) => !t.deptId).map((t) => `<option value="${t.id}">${esc(t.name)}</option>`).join('')}</optgroup>` : ''}</select></div>
+  <small class="quiet block" style="margin-bottom:10px">يبقى معلمًا بحصصه ومواده، وتحدد صلاحياته في الخطوة التالية.</small>
+  <button class="btn big" onclick="A.assignLead()">متابعة</button>`; }
 SCREENS.users = () => {
   const f = UI.f; const q = (f.q || '').trim();
+  if ((f.utab || 'lead') === 'lead') return topBar('المستخدمون', S.users.length + ' حسابًا') + `<main class="pad">${seg([['lead', 'القيادات والصلاحيات'], ['all', 'كل الحسابات']], 'lead', "A.setF('utab',")}<div style="height:10px"></div>${leadersHtml()}</main>`;
   const list = S.users.filter((u) => !q || u.name.includes(q) || u.code.toLowerCase().includes(q.toLowerCase()));
-  return topBar('المستخدمون', S.users.length + ' حسابًا') + `<main class="pad">
+  return topBar('المستخدمون', S.users.length + ' حسابًا') + `<main class="pad">${seg([['lead', 'القيادات والصلاحيات'], ['all', 'كل الحسابات']], 'all', "A.setF('utab',")}<div style="height:10px"></div>
   <div class="grid2b"><button class="btn" onclick="A.modal({type:'addUser',role:'supervisor',sub:[]})">${ic('plus', 16)} إضافة حساب</button><button class="btn ghost" onclick="A.toast('في النسخة الحقيقية ترفع ملف Excel بالأسماء ثم توزّعهم.')">${ic('upload', 16)} رفع ملف Excel</button></div>
   <input class="inp full" style="margin:10px 0" placeholder="ابحث بالاسم أو الرقم الأكاديمي" value="${esc(q)}" oninput="A.q(this.value)" aria-label="بحث">
   ${list.map((u) => `<button class="card row" onclick="${teaches(u) ? `A.editTeacher('${u.id}')` : `A.editUser('${u.id}')`}">${avHtml(u)}<div class="grow"><b>${esc(u.name)}</b>${penTag(u)}<small>${esc(u.asst ? 'مساعد مدير' : ROLE[u.role])}${u.teaches ? ' + معلم' : ''} · ${esc(u.deptId ? deptById(u.deptId).name : u.classId ? 'فصل ' + classById(u.classId).name : u.role === 'admin' ? (u.asst ? 'صلاحيات المدير' : 'كامل الصلاحيات') : (u.role === 'sdir' || u.role === 'svdean') ? 'معهد الدراسات الموسيقية' : (u.role === 'dean' || u.role === 'vdean') ? 'المعهدان' : 'المعهد العالي')}${u.subjects && u.subjects.length ? ' · ' + esc(u.subjects.join('، ')) : ''}${u.role === 'student' ? ' · ' + esc([u.deptId ? deptById(u.deptId).name : '', u.status, u.instrument].filter(Boolean).join(' · ')) : ''}</small><small dir="ltr" style="text-align:right;color:#24539F;font-weight:600">${esc(u.code)}</small></div><span style="display:flex;flex-direction:column;gap:4px;align-items:flex-end">${pill(u.active ? 'نشط' : 'معطّل', u.active ? 'ok' : 'mute')}${profileOk(u) ? '' : pill('بيانات ناقصة', 'warn')}</span></button>`).join('')}</main>`;
@@ -1907,6 +1927,7 @@ MODALS.editUser = () => { const m = UI.modal; const u = userById(m.id); return `
   ${okPhoto(u.photo) ? `<div class="row between" style="margin-bottom:10px">${avHtml(u, 'av')}<button class="btn danger sm" onclick="A.adminDelPhoto('${u.id}')">حذف الصورة الشخصية</button></div>` : ''}
   ${u.id !== 'admin' && u.role !== 'student' && me().role === 'admin' ? `<button class="btn ghost big" style="margin-bottom:8px" onclick="A.rolePerm('${u.id}')">${ic('lock', 16)} الفئة والصلاحيات (${esc(u.asst ? 'مساعد مدير' : ROLE[u.role])})</button>` : ''}
   <div class="note bad" id="eerr" hidden></div><button class="btn big" onclick="A.saveEdit()">حفظ</button>`; };
+MODALS.assignLead = assignLeadModal;
 MODALS.rolePerm = () => { const m = UI.modal; const u = userById(m.id); const isT = m.role === 'teacher';
   const roles = [['teacher', 'معلم'], ['head', 'رئيس قسم'], ['dean', 'العميد'], ['vdean', 'الوكيل'], ['sdir', 'مدير الثانوي'], ['svdean', 'وكيلة الثانوي'], ['supervisor', 'مشرف فصل'], ['admin', 'مساعد مدير']];
   const holders = ['dean', 'vdean', 'sdir', 'svdean'].includes(m.role) ? S.users.filter((x) => x.role === m.role && x.id !== u.id) : m.role === 'head' ? S.users.filter((x) => x.role === 'head' && x.deptId === m.dept && x.id !== u.id) : [];
@@ -2190,6 +2211,11 @@ const A = {
     if (!name || !subjects.length) { A.toast('اكتب اسم المعلم واختر مادة واحدة على الأقل.'); return; }
     const phone = ((document.getElementById('nt-phone') || {}).value || '').replace(/[^0-9]/g, '').slice(0, 8);
     const code = 'T2026-' + String(S.seq.T++).padStart(4, '0'); S.users.push({ id: 'u' + rid(), code, name, role: 'teacher', deptId, subjects, phone, email: '', active: true }); commit('أُضيف المعلم برقم ' + code + '.'); },
+  toggleTeach(id) { const u = userById(id); if (!u || u.role === 'teacher' || u.role === 'student') return;
+    if (u.teaches) { delete u.teaches; if (u.perms) u.perms = u.perms.filter((k) => k !== 'lessons'); commit(u.name + ': لم يعد يدرّس.' + (S.sessions.some((s) => isMineS(s, u.id)) ? ' تنبيه: ما زالت له محاضرات في الجدول باسمه.' : '')); }
+    else { u.teaches = true; u.subjects = u.subjects || []; commit(u.name + ': صار معلمًا أيضًا، وتظهر له صفحة «حصصي».'); } },
+  assignLead() { const id = (document.getElementById('alt') || {}).value; const role = UI.modal.role; if (!id) return; A.rolePerm(id); const m = UI.modal; if (!m) return; m.role = role; m.also = true; m.perms = defaultPerms(role, true);
+    if (role === 'head') m.dept = userById(id).deptId || m.dept; render(); },
   pickHead(deptId) { const id = (document.getElementById('hp-' + deptId) || {}).value; const t = userById(id); if (!t) return;
     S.users.filter((x) => x.role === 'head' && x.deptId === deptId && x.id !== t.id).forEach((x) => { x.role = 'teacher'; delete x.teaches; delete x.perms; });
     t.role = 'head'; t.deptId = deptId; t.teaches = true; delete t.perms; commit(t.name + ' رئيسًا لـ' + deptById(deptId).name + '.'); },

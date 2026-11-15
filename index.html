@@ -741,6 +741,9 @@ function lessonState(s, d) {
 }
 function teacherStatus(s, d) {
   const rec = S.records[s.id + '|' + d]; const ls = lessonState(s, d);
+  const ov = ((S.settings || {}).tov || {})[s.id + '|' + d];
+  if (ov) return ov.st === 'ok' ? { l: 'حاضر (تعديل إداري)', c: 'ok', dot: '#1E9E5A', where: 'عدّله ' + ov.by } : ov.st === 'exc' ? { l: 'معذور · ' + (ov.reason || ''), c: 'warn', dot: '#E0A21B', where: 'عدّله ' + ov.by } : { l: 'غائب (تعديل إداري)', c: 'bad', dot: '#D2372C', where: 'عدّله ' + ov.by };
+  if (rec && rec.admin) return { l: 'غائب (سجّلت الإدارة غياب الطلاب)', c: 'bad', dot: '#D2372C', where: '—' };
   if (rec) return rec.inside ? { l: 'حاضر', c: 'ok', dot: '#1E9E5A', where: 'داخل المعهد' } : { l: 'غائب', c: 'bad', dot: '#D2372C', where: 'خارج المعهد · 14 كم' };
   if (ls === 'future') return { l: 'لم تبدأ', c: 'mute', dot: '#B4BCC7', where: '—' };
   if (ls === 'open') return { l: 'لم يسجّل بعد', c: 'bad', dot: '#D2372C', where: '—' };
@@ -1284,7 +1287,7 @@ SCREENS.treport = () => {
   <div class="note info">القاعدة: المعلم يُعتبر غائبًا في كل محاضرة، ولا يُحتسب حاضرًا إلا إذا سجّل غياب طلابه أثناء المحاضرة ومن داخل المعهد.</div>
   <div class="row wrap" style="gap:8px;margin-bottom:10px"><input type="date" class="inp" value="${esc(d)}" onchange="A.setF('repDate',this.value)" aria-label="اليوم">${seg([['all', 'الكل'], ['ok', 'حاضر'], ['bad', 'غائب']], flt, 'A.rflt')}<span class="grow"></span><button class="btn ghost sm" onclick="A.toast('في النسخة الحقيقية يُنزَّل التقرير PDF أو Excel.')">تنزيل PDF / Excel</button></div>
   <div class="kpis3 light"><div><span>المحاضرات</span><b>${rows.length}</b></div><div><span>حضور مُثبت</span><b style="color:var(--ok)">${ok}</b></div><div><span>غياب</span><b style="color:var(--bad)">${bad}</b></div></div>
-  <div class="tablebox" style="margin-top:12px"><table class="t"><thead><tr><th>المعلم</th><th>المحاضرة</th><th>وقت التسجيل</th><th>الموقع عند التسجيل</th><th>الحالة</th><th></th></tr></thead><tbody>${shown.map(({ s, ts, rec }) => `<tr><td><span class="dot" style="background:${ts.dot}"></span>${esc(userById(s.teacherId).name)}${userById(s.teacherId).role === 'head' ? ' <small class="quiet">(رئيس القسم)</small>' : ''}</td><td>${s.p} · ${esc(s.subject)}<small class="block quiet">${esc(targetName(s))}</small></td><td>${rec ? esc(t12(rec.at)) : '—'}</td><td>${esc(ts.where)}</td><td>${pill(ts.l, ts.c)}</td><td>${rec ? `<button class="btn ghost sm" onclick="A.modal({type:'fix',sid:'${s.id}',d:'${d}'})">السجل</button>` : ''}</td></tr>`).join('') || '<tr><td colspan="6" class="empty">لا توجد محاضرات في هذا اليوم.</td></tr>'}</tbody></table></div></main>`;
+  <div class="tablebox" style="margin-top:12px"><table class="t"><thead><tr><th>المعلم</th><th>المحاضرة</th><th>وقت التسجيل</th><th>الموقع عند التسجيل</th><th>الحالة</th><th></th></tr></thead><tbody>${shown.map(({ s, ts, rec }) => `<tr><td><span class="dot" style="background:${ts.dot}"></span>${esc(userById(s.teacherId).name)}${userById(s.teacherId).role === 'head' ? ' <small class="quiet">(رئيس القسم)</small>' : ''}</td><td>${s.p} · ${esc(s.subject)}<small class="block quiet">${esc(targetName(s))}</small></td><td>${rec ? esc(t12(rec.at)) : '—'}</td><td>${esc(ts.where)}</td><td>${pill(ts.l, ts.c)}</td><td><div class="row" style="gap:6px;flex-wrap:wrap;justify-content:flex-end">${rec ? `<button class="btn ghost sm" onclick="A.modal({type:'fix',sid:'${s.id}',d:'${d}'})">غياب الطلاب</button>` : canFix(me(), s) && lessonState(s, d) !== 'future' ? `<button class="btn ghost sm" onclick="A.modal({type:'fix',sid:'${s.id}',d:'${d}'})">تسجيل غياب الطلاب</button>` : ''}${me().role === 'admin' && lessonState(s, d) !== 'future' ? `<button class="btn ghost sm" onclick="A.modal({type:'tfix',sid:'${s.id}',d:'${d}'})">حالة المعلم</button>` : ''}</div></td></tr>`).join('') || '<tr><td colspan="6" class="empty">لا توجد محاضرات في هذا اليوم.</td></tr>'}</tbody></table></div></main>`;
 };
 const REP_TYPES = ['أكاديمي', 'سلوكي', 'تميّز وإشادة', 'غياب وانضباط', 'صحي', 'أخرى'];
 function repRecipients(t, stu) {
@@ -1688,6 +1691,7 @@ SCREENS.reports = () => {
   return topBar('التقارير', 'كل المعهدين · منذ بداية الفصل') + `<main class="pad">
   <div class="kpis4"><div><span>نسبة الحضور</span><b style="color:var(--ok)">${total ? Math.round((total - abs) / total * 100) : 100}%</b></div><div><span>حالات الغياب</span><b style="color:var(--bad)">${abs}</b></div><div><span>إنذارات وحرمان</span><b style="color:var(--warn)">${over.length}</b></div><div><span>أعذار معلّقة</span><b>${S.excuses.filter((e) => /pending/.test(exStatus(e))).length}</b></div></div>
   <div class="card"><b>الغياب حسب اليوم</b><div class="bars">${byDay.map((v, i) => `<div><small>${v}</small><i style="height:${Math.round(v / max * 110)}px;background:${v === max && v ? 'var(--accent)' : '#B9C9E2'}"></i><span>${DAYS[i]}</span></div>`).join('')}</div></div>
+  <div class="grid2b"><button class="card rowbtn" onclick="A.go('treport')"><b>${ic('chart', 18)} حضور المعلمين وتعديل الغياب</b><small class="quiet block">حالة كل معلم في كل محاضرة، وتعديل غياب الطلاب وحالة المعلم</small></button><button class="card rowbtn" onclick="A.go('hstudents')"><b>${ic('userx', 18)} غياب الطلاب</b><small class="quiet block">كل الفصول، وملف غياب كل طالب</small></button></div>
   <div class="grid2b"><button class="card rowbtn" onclick="A.go('printc')"><b>${ic('print', 18)} مركز الطباعة</b><small class="quiet block">كشوف الطلاب والمعلمين والجداول والنماذج</small></button><button class="card rowbtn" onclick="A.go('discipline')"><b>${ic('shield', 18)} الإجراءات التأديبية</b><small class="quiet block">${(S.penalties || []).filter((p) => p.status === 'active' && (!p.end || p.end >= UI.date)).length} سارية</small></button><button class="card rowbtn" onclick="A.go('allreps')"><b>${ic('file', 18)} تقارير المعلمين عن الطلاب</b><small class="quiet block">${(S.reports || []).length} تقرير</small></button><button class="card rowbtn" onclick="A.go('treport')"><b>${ic('chart', 18)} التقرير اليومي لحضور المعلمين</b><small class="quiet block">بالموقع ووقت التسجيل</small></button><button class="card rowbtn" onclick="A.go('warnings')"><b>${ic('userx', 18)} الإنذارات والحرمان</b><small class="quiet block">مع بطاقات الحصر</small></button><button class="card rowbtn" onclick="A.go('excuses')"><b>${ic('file', 18)} الأعذار الطبية</b><small class="quiet block">المعتمدة والمعلّقة</small></button><button class="card rowbtn" onclick="A.go('inboxAll')"><b>${ic('chat', 18)} كل الشكاوى</b><small class="quiet block">ومسار كل شكوى</small></button></div></main>`;
 };
 SCREENS.classStudents = (p) => {
@@ -1880,16 +1884,26 @@ function cardForm(sid, sub) {
 }
 MODALS.card = () => `<div class="mhead"><h2>بطاقة حصر غياب الطالب</h2>${closeBtn}</div>` + cardForm(UI.modal.sid, UI.modal.sub) + `  <div class="row" style="gap:8px;margin-top:10px"><button class="btn" onclick="A.share()">${ic('upload', 16)} مشاركة / PDF</button></div>`;
 MODALS.fix = () => {
-  const m = UI.modal; const s = sessById(m.sid); const rec = S.records[m.sid + '|' + m.d]; const u = me();
+  const m = UI.modal; const s = sessById(m.sid); const rec = S.records[m.sid + '|' + m.d] || { st: {}, none: true }; const u = me();
   if (!m.st) m.st = Object.assign({}, rec.st);
   const can = canFix(u, s); const logs = S.log.filter((l) => l.key === m.sid + '|' + m.d);
   return `<div class="mhead"><div><h2>تصحيح سجل الغياب</h2><small class="quiet">${esc(s.subject)} · ${esc(targetName(s))} · ${esc(fmtD(m.d))} · المحاضرة ${s.p}</small></div>${closeBtn}</div>
-  <div class="note info">${ic('lock', 14)} مغلق · سجّله ${esc(userById(rec.by).name)} الساعة ${esc(t12(rec.at))} ${rec.inside ? 'من داخل المعهد' : 'من خارج المعهد'}</div>
+  ${rec.none ? '<div class="note warn">لم يسجّل المعلم غياب هذه المحاضرة. ما تحفظه هنا يُسجَّل باسم الإدارة، ويبقى المعلم غائبًا ما لم تعدّل «حالة المعلم».</div>' : `<div class="note info">${ic('lock', 14)} مغلق · سجّله ${esc((userById(rec.by) || { name: 'الإدارة' }).name)} الساعة ${esc(t12(rec.at))} ${rec.admin ? '(تسجيل إداري)' : rec.inside ? 'من داخل المعهد' : 'من خارج المعهد'}</div>`}
   ${can ? '<p class="quiet">اضغط على الطالب لتغيير حالته. لا يمكن الحفظ بدون سبب.</p>' : '<div class="note warn">لا تملك صلاحية تصحيح هذا السجل.</div>'}
   ${studentsOf(S, s).map((x) => { const v = m.st[x.id] || 'present'; const was = rec.st[x.id] || 'present'; const ch = v !== was; return `<button class="strow${ch ? ' changed' : ''}" ${can && was !== 'medical' ? `onclick="A.fcyc('${x.id}')"` : 'disabled'}><span class="grow"><b>${esc(x.name)}</b>${ch ? `<small style="color:var(--warn)">كان: ${ST[was].l}</small>` : ''}</span>${pill(ST[v].l, ST[v].c)}</button>`; }).join('')}
   ${can ? `<div class="field"><label for="fixr">سبب التصحيح *</label><select id="fixr"><option value="">اختر السبب</option><option>خطأ من المعلم في التسجيل</option><option>عذر مقبول قُدّم لاحقًا</option><option>مشكلة تقنية في التطبيق</option><option>مهمة رسمية للطالب</option></select></div><button class="btn big" onclick="A.saveFix()">حفظ التصحيح</button>` : ''}
   ${logs.length ? `<h3 class="sec">سجل التصحيحات</h3>${logs.map((l) => `<div class="logrow">${esc(l.text)}</div>`).join('')}` : ''}`;
 };
+MODALS.tfix = () => { const m = UI.modal; const s = sessById(m.sid); const t = userById(s.teacherId); const cur = teacherStatus(s, m.d); const ov = ((S.settings || {}).tov || {})[m.sid + '|' + m.d];
+  const opts = [['ok', 'حاضر', 'ok'], ['exc', 'معذور / مهمة رسمية', 'warn'], ['bad', 'غائب', 'bad']]; if (!m.st) m.st = ov ? ov.st : '';
+  const logs = S.log.filter((l) => l.key === 't|' + m.sid + '|' + m.d);
+  return `<div class="mhead"><div><h2>حالة المعلم</h2><small class="quiet">${esc(t.name)} · ${esc(s.subject)} · ${esc(fmtD(m.d))} · المحاضرة ${s.p}</small></div>${closeBtn}</div>
+  <div class="note info">الحالة الحالية: <b style="display:inline">${esc(cur.l)}</b></div>
+  <div class="rolegrid">${opts.map(([v, l]) => `<button class="${m.st === v ? 'on' : ''}" onclick="UI.modal.st='${v}';render()">${esc(l)}</button>`).join('')}</div>
+  <div class="field" style="margin-top:10px"><label for="tfr">السبب *</label><select id="tfr"><option value="">اختر السبب</option>${['خطأ في التسجيل أو مشكلة تقنية', 'حضر ولم يسجّل في التطبيق', 'إجازة رسمية', 'مهمة رسمية', 'إذن مسبق', 'غياب بدون عذر'].map((x) => `<option${ov && ov.reason === x ? ' selected' : ''}>${esc(x)}</option>`).join('')}</select></div>
+  <button class="btn big" ${m.st ? '' : 'disabled'} onclick="A.saveTfix()">حفظ حالة المعلم</button>
+  ${ov ? `<button class="link" style="margin-top:8px" onclick="A.clearTfix()">إلغاء التعديل والرجوع للحالة التلقائية</button>` : ''}
+  ${logs.length ? `<h3 class="sec">سجل التعديلات</h3>${logs.map((l) => `<div class="logrow">${esc(l.text)}</div>`).join('')}` : ''}`; };
 MODALS.cell = () => {
   const m = UI.modal; if (m.kind === 'solo') A.fixSolo(); const t = userById(m.tid); const studs = S.users.filter((x) => x.role === 'student'); const conflict = findConflict(m);
   return `<div class="mhead"><div><h2>${DAYS[m.d]} — المحاضرة ${m.p}</h2><small class="quiet">${esc(t.name)} · ${esc(t12(per(m.p).s))} – ${esc(t12(per(m.p).e))}</small></div>${closeBtn}</div>
@@ -2179,10 +2193,19 @@ const A = {
   // reports & fix
   rflt(v) { UI.f.rflt = v; render(); },
   fcyc(id) { const m = UI.modal; const v = m.st[id] || 'present'; m.st[id] = CYCLE[(CYCLE.indexOf(v) + 1) % CYCLE.length] || 'present'; render(); },
+  saveTfix() { const m = UI.modal; const reason = (document.getElementById('tfr') || {}).value; if (!m.st) return; if (!reason) { A.toast('اختر السبب أولًا.'); return; }
+    S.settings.tov = Object.assign({}, S.settings.tov || {}); const key = m.sid + '|' + m.d; const lbl = { ok: 'حاضر', exc: 'معذور', bad: 'غائب' }[m.st];
+    S.settings.tov[key] = { st: m.st, reason, by: me().name, at: UI.date + ' ' + UI.time };
+    S.log.push({ key: 't|' + key, text: 'حالة المعلم ← ' + lbl + ' · ' + me().name + ' · ' + fmtD(UI.date) + ' ' + t12(UI.time) + ' · السبب: ' + reason });
+    UI.modal = null; commit('تم تعديل حالة المعلم إلى: ' + lbl + '.'); },
+  clearTfix() { const m = UI.modal; const key = m.sid + '|' + m.d; S.settings.tov = Object.assign({}, S.settings.tov || {}); delete S.settings.tov[key];
+    S.log.push({ key: 't|' + key, text: 'أُلغي التعديل الإداري لحالة المعلم · ' + me().name + ' · ' + fmtD(UI.date) + ' ' + t12(UI.time) }); UI.modal = null; commit('رجعت حالة المعلم للحساب التلقائي.'); },
   saveFix() {
-    const m = UI.modal; const reason = document.getElementById('fixr').value; const rec = S.records[m.sid + '|' + m.d];
+    const m = UI.modal; const reason = document.getElementById('fixr').value; const key = m.sid + '|' + m.d; const isNew = !S.records[key];
+    const rec = S.records[key] || { st: {}, at: UI.time, inside: false, by: me().id, admin: true };
     const ch = Object.keys(m.st).filter((k) => m.st[k] !== (rec.st[k] || 'present'));
-    if (!ch.length) { UI.modal = null; A.toast('لا توجد تغييرات.'); return; }
+    if (!ch.length && !isNew) { UI.modal = null; A.toast('لا توجد تغييرات.'); return; }
+    if (isNew) { if (!reason) { A.toast('اختر السبب أولًا.'); return; } studentsOf(S, sessById(m.sid)).forEach((x) => { if (!m.st[x.id]) m.st[x.id] = 'present'; }); S.records[key] = rec; S.log.push({ key, text: 'سجّلت الإدارة غياب المحاضرة · ' + me().name + ' · ' + fmtD(UI.date) + ' ' + t12(UI.time) + ' · السبب: ' + reason }); }
     if (!reason) { A.toast('اختر سبب التصحيح أولًا.'); return; }
     ch.forEach((k) => S.log.push({ key: m.sid + '|' + m.d, text: userById(k).name + ': ' + ST[rec.st[k] || 'present'].l + ' ← ' + ST[m.st[k]].l + ' · ' + me().name + ' (' + ROLE[me().role] + ') · ' + fmtD(UI.date) + ' ' + t12(UI.time) + ' · السبب: ' + reason }));
     rec.st = Object.assign({}, rec.st, m.st); UI.modal = null; commit('تم حفظ التصحيح، وتحدّثت بطاقة الحصر والإنذارات، ووصل إشعار للمعلم والطالب.');

@@ -270,6 +270,8 @@ td .pentag{margin-inline-start:0;margin-top:2px;display:inline-flex}
 .card.lead{display:block;padding:12px}.card.lead .swrow{margin-top:8px}.card.lead .lperm{margin-top:6px;font-size:11.5px;line-height:1.6}
 .sched .cedit{cursor:pointer;font:inherit;text-align:inherit}.sched .cedit:hover{outline:2px solid #9DB6DD;outline-offset:-2px}
 .scls{display:block;font-size:10.5px;font-weight:700;color:#6B3FA0;margin-top:1px}
+.gmapwrap{position:relative;border-radius:14px;overflow:hidden;border:1px solid var(--line);background:#E9EEF5;margin-bottom:4px}.gmap{height:300px;width:100%}.gmapempty{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;text-align:center;padding:20px;color:var(--quiet);font-size:13px}.gmapmsg{position:absolute;left:8px;right:8px;bottom:8px;background:#fff;border-radius:10px;padding:8px 10px;font-size:12px;box-shadow:0 2px 8px rgba(0,0,0,.15);z-index:500}
+.leaflet-container{font:12px system-ui;direction:ltr}
 </style>
 </head>
 <body>
@@ -902,6 +904,7 @@ function bindSigPad() {
 }
 function after() {
   bindSigPad();
+  if (document.getElementById && document.getElementById('gmap')) initGeoMap(); else if (GMAP) { try { GMAP.map.remove(); } catch (e) {} GMAP = null; }
   document.querySelectorAll && document.querySelectorAll('[data-fit]').forEach((el) => {
     const w = Number(el.getAttribute('data-fit')); const box = el.parentElement; const sc = Math.min(1, box.clientWidth / w);
     el.style.transform = 'scale(' + sc + ')'; box.style.height = (el.offsetHeight * sc) + 'px';
@@ -1677,13 +1680,40 @@ SCREENS.structure = () => {
   return topBar('الهيكل الأكاديمي', 'للمدير فقط') + `<main class="pad">${seg([['depts', 'الأقسام'], ['classes', 'الفصول'], ['settings', 'الإعدادات']], tab, 'A.stab')}${body}</main>`;
 };
 SCREENS.geofence = () => {
-  const r = UI.f.rad || S.settings.radius;
+  const r = UI.f.rad || S.settings.radius; const g = UI.f.geo || S.settings.geo || null; const saved = S.settings.geo;
+  const changed = !saved || !g || saved.lat !== g.lat || saved.lng !== g.lng || r !== S.settings.radius;
   return topBar('موقع المعهد', 'المنطقة التي يُعتبر التسجيل داخلها حضورًا') + `<main class="pad">
-  <div class="mapbox" aria-hidden="true"><i class="road r1"></i><i class="road r2"></i><i class="road r3"></i><i class="bld"></i><i class="ring" style="width:${Math.round(r * 0.9)}px;height:${Math.round(r * 0.9)}px"></i><span class="pinm">${ic('pin', 30, 'var(--accent)')}</span><small>معاينة · تظهر خريطة حقيقية في النظام</small></div>
-  <div class="card"><b>١. حدّد مركز المعهد</b><button class="btn big" style="margin-top:8px" onclick="A.toast('في النسخة الحقيقية يُؤخذ موقعك الحالي كمركز للمعهد.')">${ic('pin', 18)} استخدم موقعي الحالي</button><small class="quiet block" style="margin-top:6px">أو الصق رابط الموقع من خرائط Google</small><input class="inp full" dir="ltr" placeholder="https://maps.google.com/..."></div>
-  <div class="card"><div class="row between"><b>٢. نطاق المعهد</b><b style="color:var(--accent)">${r} متر</b></div><input type="range" min="50" max="500" step="10" value="${r}" oninput="A.rad(this.value)" style="width:100%;accent-color:var(--accent)" aria-label="نطاق المعهد"><small class="quiet">يُنصح بـ 150 مترًا على الأقل لأن دقة GPS تقل داخل المباني.</small></div>
-  <button class="btn big" onclick="A.saveRad()">حفظ الموقع</button></main>`;
+  <div class="gmapwrap"><div id="gmap" class="gmap" role="application" aria-label="خريطة موقع المعهد"></div>
+    ${g ? '' : '<div class="gmapempty">حدّد موقع المعهد بإحدى الطريقتين أدناه، وستظهر الخريطة مع دائرة النطاق للمعاينة.</div>'}<div id="gmapmsg" class="gmapmsg" hidden></div></div>
+  ${g ? `<small class="quiet block" style="margin:6px 2px 10px">${ic('pin', 12)} <span dir="ltr">${g.lat.toFixed(6)}, ${g.lng.toFixed(6)}</span> · اسحب الدبوس أو اضغط على الخريطة لتعديل المركز · <a href="https://www.google.com/maps?q=${g.lat},${g.lng}" target="_blank" rel="noopener">فتح في خرائط Google</a></small>` : ''}
+  <div class="card"><b>١. حدّد مركز المعهد</b><button class="btn big" style="margin-top:8px" onclick="A.geoMe()">${ic('pin', 18)} استخدم موقعي الحالي</button>
+    <small class="quiet block" style="margin-top:8px">أو الصق رابط الموقع من خرائط Google أو الإحداثيات (مثل 29.3375, 47.9744):</small>
+    <div class="row" style="gap:6px;margin-top:6px"><input id="glink" class="inp grow" dir="ltr" placeholder="https://maps.google.com/..."><button class="btn ghost" onclick="A.geoLink()">معاينة</button></div></div>
+  <div class="card"><div class="row between"><b>٢. نطاق المعهد</b><b id="gradv" style="color:var(--accent)">${r} متر</b></div><input type="range" min="50" max="500" step="10" value="${r}" oninput="A.rad(this.value)" style="width:100%;accent-color:var(--accent)" aria-label="نطاق المعهد"><small class="quiet">الدائرة على الخريطة تتغير مباشرة. يُنصح بـ 150 مترًا على الأقل لأن دقة GPS تقل داخل المباني.</small></div>
+  ${changed && g ? '<div class="note warn">هذه معاينة فقط · لم يُحفظ الموقع بعد.</div>' : saved ? '<div class="note ok">الموقع المعروض هو المحفوظ حاليًا.</div>' : ''}
+  <button class="btn big" ${g ? '' : 'disabled'} onclick="A.saveRad()">حفظ الموقع</button></main>`;
 };
+let GMAP = null;
+function loadLeaflet(cb) {
+  if (window.L) return cb();
+  if (!document.getElementById('lfcss')) { const l = document.createElement('link'); l.id = 'lfcss'; l.rel = 'stylesheet'; l.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css'; document.head.appendChild(l); }
+  const s = document.createElement('script'); s.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js'; s.onload = cb; s.onerror = () => { const m = document.getElementById('gmapmsg'); if (m) { m.hidden = false; m.textContent = 'تعذّر تحميل الخريطة هنا. تظهر الخريطة في موقع النظام على الإنترنت، والإحداثيات محفوظة كما هي.'; } }; document.head.appendChild(s);
+}
+function initGeoMap() {
+  const el = document.getElementById('gmap'); if (!el) { GMAP = null; return; }
+  const g = UI.f.geo || S.settings.geo; if (!g) return;
+  loadLeaflet(() => { if (!document.getElementById('gmap') || !window.L) return; const L = window.L; const r = UI.f.rad || S.settings.radius;
+    if (GMAP && GMAP.el !== el) { try { GMAP.map.remove(); } catch (e) {} GMAP = null; }
+    if (!GMAP) { const map = L.map(el, { zoomControl: true, attributionControl: true }); L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© OpenStreetMap' }).addTo(map);
+      const mk = L.marker([g.lat, g.lng], { draggable: true }).addTo(map); const c = L.circle([g.lat, g.lng], { radius: r, color: '#24539F', weight: 2, fillColor: '#24539F', fillOpacity: 0.15 }).addTo(map);
+      const move = (ll) => { UI.f.geo = { lat: +ll.lat.toFixed(6), lng: +ll.lng.toFixed(6) }; render(); };
+      mk.on('dragend', () => move(mk.getLatLng())); map.on('click', (e) => move(e.latlng));
+      GMAP = { el, map, mk, c }; map.fitBounds(c.getBounds(), { padding: [24, 24] }); }
+    else { GMAP.mk.setLatLng([g.lat, g.lng]); GMAP.c.setLatLng([g.lat, g.lng]); GMAP.c.setRadius(r); }
+  });
+}
+function parseGeo(s) { s = (s || '').trim(); let m = s.match(/@(-?\d+\.\d+),\s*(-?\d+\.\d+)/) || s.match(/!3d(-?\d+\.\d+)!4d(-?\d+\.\d+)/) || s.match(/[?&](?:q|query|ll|destination)=(-?\d+\.\d+)(?:,|%2C)\s*(-?\d+\.\d+)/) || s.match(/^(-?\d{1,2}\.\d+)\s*[, ]\s*(-?\d{1,3}\.\d+)$/);
+  if (!m) return null; const lat = +m[1], lng = +m[2]; return Math.abs(lat) <= 90 && Math.abs(lng) <= 180 ? { lat, lng } : null; }
 SCREENS.reports = () => {
   const studs = S.users.filter((u) => u.role === 'student'); let total = 0, abs = 0; const byDay = [0, 0, 0, 0, 0];
   Object.entries(S.records).forEach(([k, r]) => { const d = k.split('|')[1]; Object.values(r.st).forEach((v) => { if (v === 'medical') return; total++; if (v === 'absent') { abs++; byDay[dayIdx(d)]++; } }); });
@@ -1971,6 +2001,7 @@ MODALS.editUser = () => { const m = UI.modal; const u = userById(m.id); return `
   ${u.id !== 'admin' ? sw(m.active, 'UI.modal.active=!UI.modal.active;render()', 'الحساب نشط', 'الحساب الموقوف لا يستطيع الدخول') : ''}
   <p class="hint">إذا أضفت الهاتف والبريد هنا فلن يُطلب منه إكمالهما عند الدخول.</p>
   ${okPhoto(u.photo) ? `<div class="row between" style="margin-bottom:10px">${avHtml(u, 'av')}<button class="btn danger sm" onclick="A.adminDelPhoto('${u.id}')">حذف الصورة الشخصية</button></div>` : ''}
+  ${me().role === 'admin' && u.id !== me().id ? `<button class="btn ghost big" style="margin-bottom:8px" onclick="A.resetPw('${u.id}')">${ic('lock', 16)} إعادة تعيين كلمة المرور</button>` : ''}
   ${u.id !== 'admin' && u.role !== 'student' && me().role === 'admin' ? `<button class="btn ghost big" style="margin-bottom:8px" onclick="A.rolePerm('${u.id}')">${ic('lock', 16)} الفئة والصلاحيات (${esc(u.asst ? 'مساعد مدير' : ROLE[u.role])})</button>` : ''}
   <div class="note bad" id="eerr" hidden></div><button class="btn big" onclick="A.saveEdit()">حفظ</button>`; };
 MODALS.assignLead = assignLeadModal;
@@ -2030,6 +2061,7 @@ MODALS.editTeacher = () => {
   <div class="row" style="gap:8px"><input id="et-spec" class="inp grow" list="et-specs" placeholder="مثال: وتريات، عود، غناء أوبرالي"><datalist id="et-specs">${[...new Set(S.depts.flatMap((d) => d.specs || []))].map((x) => `<option value="${esc(x)}">`).join('')}</datalist><button class="btn sm" onclick="A.etAddSpec()">إضافة</button></div></div>
   ${isAdmin && t.id !== 'admin' ? sw(m.active, 'UI.modal.active=!UI.modal.active;render()', 'الحساب نشط', 'الحساب الموقوف لا يستطيع الدخول') : ''}
   ${okPhoto(t.photo) && isAdmin ? `<div class="row between" style="margin-bottom:10px">${avHtml(t, 'av')}<button class="btn danger sm" onclick="A.adminDelPhoto('${t.id}')">حذف الصورة الشخصية</button></div>` : ''}
+  ${isAdmin && t.id !== me().id ? `<button class="btn ghost big" style="margin-bottom:8px" onclick="A.resetPw('${t.id}')">${ic('lock', 16)} إعادة تعيين كلمة المرور</button>` : ''}
   ${isAdmin && t.id !== 'admin' ? `<button class="btn ghost big" style="margin-bottom:8px" onclick="A.rolePerm('${t.id}')">${ic('lock', 16)} الفئة والصلاحيات (${esc(t.role === 'teacher' ? 'معلم' : ROLE[t.role])})</button>` : ''}
   <div class="note bad" id="eterr" hidden></div><button class="btn big" onclick="A.saveTeacher()">حفظ التعديلات</button>
   <p class="hint">إزالة مادة لا تحذف محاضراتها الموجودة في الجدول، ولا تؤثر على سجل الغياب.</p>`;
@@ -2292,6 +2324,8 @@ const A = {
     UI.modal = null; commit('أُضيفت ' + m.subject + ' لفصل ' + c.name + ' · ' + DAYS[m.d] + ' المحاضرة ' + m.p + '، وظهرت في جدول ' + t.name + '.'); },
   ccDel(id) { const s = sessById(id); if (!s || !canEditSchedule(me(), userById(s.teacherId))) return; if (!confirm('حذف ' + s.subject + ' من هذه الخانة؟ تبقى سجلات الغياب السابقة محفوظة.')) return;
     if (Object.keys(S.records).some((k) => k.startsWith(id + '|'))) { S.archived = (S.archived || []).concat([s]); } S.sessions = S.sessions.filter((x) => x.id !== id); render(); commit('حُذفت المحاضرة من الجدول.'); },
+  resetPw(id) { const u = userById(id); if (!u || me().role !== 'admin') return; if (!confirm('إعادة تعيين كلمة مرور ' + u.name + '؟')) return;
+    u.mustChange = true; commit('أُعيد تعيين كلمة مرور ' + u.name + '. في النظام الفعلي يدخل بالبريد ' + (u.email || '') + ' والرقم ' + u.code + ' ويعيّن كلمة مرور جديدة.'); },
   toggleTeach(id) { const u = userById(id); if (!u || u.role === 'teacher' || u.role === 'student') return;
     if (u.teaches) { delete u.teaches; if (u.perms) u.perms = u.perms.filter((k) => k !== 'lessons'); commit(u.name + ': لم يعد يدرّس.' + (S.sessions.some((s) => isMineS(s, u.id)) ? ' تنبيه: ما زالت له محاضرات في الجدول باسمه.' : '')); }
     else { u.teaches = true; u.subjects = u.subjects || []; commit(u.name + ': صار معلمًا أيضًا، وتظهر له صفحة «حصصي».'); } },
@@ -2332,8 +2366,14 @@ const A = {
     S.settings.domain = v; commit(v ? 'صار البريد المقبول فقط @' + v : 'أُلغي شرط النطاق.'); },
   alert(k) { S.settings.alerts[k] = !S.settings.alerts[k]; commit(); },
   timing(v) { S.settings.timing = v; commit(v === 'ramadan' ? 'فُعّل توقيت رمضان. (مواعيده لم تُعتمد بعد في هذه النسخة)' : null); },
-  rad(v) { UI.f.rad = Number(v); render(); },
-  saveRad() { S.settings.radius = UI.f.rad || S.settings.radius; UI.stack.pop(); UI.f = { stab: 'settings' }; commit('حُفظ موقع المعهد ونطاقه.'); },
+  rad(v) { UI.f.rad = Number(v); const el = document.getElementById('gradv'); if (el) el.textContent = v + ' متر'; if (GMAP) { GMAP.c.setRadius(Number(v)); try { GMAP.map.fitBounds(GMAP.c.getBounds(), { padding: [24, 24] }); } catch (e) {} } },
+  geoMe() { if (!navigator.geolocation) { A.toast('المتصفح لا يدعم تحديد الموقع.'); return; } A.toast('جارٍ تحديد موقعك…');
+    navigator.geolocation.getCurrentPosition((p) => { UI.f.geo = { lat: +p.coords.latitude.toFixed(6), lng: +p.coords.longitude.toFixed(6) }; render(); A.toast('تم تحديد موقعك (الدقة نحو ' + Math.round(p.coords.accuracy) + ' متر). راجع الدبوس قبل الحفظ.'); },
+      (e) => A.toast(e && e.code === 1 ? 'إذن الموقع مرفوض. فعّله من إعدادات المتصفح.' : 'تعذّر تحديد الموقع، حاول مرة أخرى.'), { enableHighAccuracy: true, timeout: 15000 }); },
+  geoLink() { const v = (document.getElementById('glink') || {}).value || ''; const g = parseGeo(v);
+    if (!g) { A.toast(/goo\.gl|maps\.app/.test(v) ? 'الرابط المختصر لا يحتوي الإحداثيات. افتحه في المتصفح ثم انسخ الرابط الطويل من شريط العنوان، أو اضغط مطولًا على الموقع في خرائط Google وانسخ الإحداثيات.' : 'لم أجد إحداثيات في الرابط.'); return; }
+    UI.f.geo = g; render(); },
+  saveRad() { if (UI.f.geo) S.settings.geo = UI.f.geo; S.settings.radius = UI.f.rad || S.settings.radius; UI.stack.pop(); UI.f = { stab: 'settings' }; commit('حُفظ موقع المعهد ونطاقه.'); },
   q(v) { UI.f.q = v; render(); const el = document.querySelector('input[aria-label="بحث"]'); if (el) { el.focus(); el.setSelectionRange(v.length, v.length); } },
   urole(v) { const m = UI.modal; m.role = v; m.sub = []; m.also = false; render(); },
   ualso() { UI.modal.also = !UI.modal.also; render(); },
@@ -2361,7 +2401,7 @@ render();
    Login by academic e-mail (one-time code / magic link), data in Postgres tables,
    saves only the rows that changed. */
 const CLOUD = window.SB_CONFIG || null;
-let SB = null, CL = { last: null, busy: false, pending: false, email: '', step: 'email', err: '', msg: '', logCount: 0, ready: false };
+let SB = null, CL = { last: null, busy: false, pending: false, email: '', code: '', step: 'pw', err: '', msg: '', logCount: 0, ready: false };
 
 const PK = { settings: ['key'], departments: ['id'], classes: ['id'], profiles: ['id'], sessions: ['id'], attendance: ['session_id', 'day'], attendance_marks: ['session_id', 'day', 'student_id'],
   excuses: ['id'], complaints: ['id'], reports: ['id'], penalties: ['id'], alerts: ['id'], signatures: ['key'], warn_done: ['key'], files: ['id'] };
@@ -2448,7 +2488,7 @@ async function cloudLoad() {
   CL.last = indexRows(toRows(S)); CL.logCount = (S.log || []).length; return true;
 }
 async function cloudSync() {
-  if (!SB || !CL.last) return;
+  if (!SB || !CL.last || (CLOUD && CLOUD.preview)) return;
   if (CL.busy) { CL.pending = true; return; }
   CL.busy = true; UI.saveNote = 'جارٍ الحفظ…'; paintSave();
   const failed = [];
@@ -2490,9 +2530,9 @@ async function cloudSession(session) {
   try {
     const ok = await cloudLoad();
     const u = ok && S.users.find((x) => (x.email || '').toLowerCase() === email && x.active !== false);
-    if (!u) { CL.step = 'email'; CL.err = 'بريدك غير مفعّل في مرحلة التجربة. الدخول حاليًا للهيئة الإدارية والتدريسية المسجّلة في النظام.'; await SB.auth.signOut(); S = { users: [], classes: [], depts: [], sessions: [], settings: {}, records: {} }; UI.uid = null; render(); return; }
-    UI.uid = u.id; UI.nav = null; UI.stack = []; UI.f = {}; CL.step = 'email'; CL.err = ''; UI.saveNote = 'محفوظ في قاعدة البيانات'; render();
-  } catch (e) { CL.step = 'email'; CL.err = 'تعذّر تحميل البيانات: ' + (e && e.message || e); UI.uid = null; render(); }
+    if (!u) { CL.step = 'pw'; CL.err = 'تم الدخول، لكن حسابك لا يملك صلاحية عرض البيانات في مرحلة التجربة (الدخول حاليًا للهيئة الإدارية والتدريسية).'; await SB.auth.signOut(); S = { users: [], classes: [], depts: [], sessions: [], settings: {}, records: {} }; UI.uid = null; render(); return; }
+    UI.uid = u.id; UI.nav = null; UI.stack = []; UI.f = {}; CL.step = 'pw'; CL.err = ''; UI.saveNote = 'محفوظ في قاعدة البيانات'; render();
+  } catch (e) { CL.step = 'pw'; CL.err = 'تعذّر تحميل البيانات: ' + (e && e.message || e); UI.uid = null; render(); }
 }
 
 if (CLOUD) {
@@ -2500,45 +2540,76 @@ if (CLOUD) {
   UI.uid = null; try { localStorage.removeItem(LSKEY); sessionStorage.removeItem(LSKEY + '-uid'); } catch (e) {}
   const c = nowClock(); UI.date = c.date; UI.time = c.time;
   setInterval(() => { const n = nowClock(); if (n.time !== UI.time || n.date !== UI.date) { UI.time = n.time; UI.date = n.date; if (!UI.modal && UI.uid) render(); } }, 30000);
-  persist = function () { cloudSync(); };
+  persist = function () { if (CLOUD.preview) { UI.saveNote = 'وضع المعاينة · التغييرات لا تُحفظ'; paintSave(); return; } cloudSync(); };
+  if (CLOUD.preview) { const st = document.createElement('style'); st.textContent = '.pvband{position:fixed;top:0;left:0;right:0;z-index:9999;background:#B54708;color:#fff;font:700 12px/1.6 system-ui;text-align:center;padding:3px 8px;pointer-events:none}body{padding-top:22px}'; document.head.appendChild(st);
+    const b = document.createElement('div'); b.className = 'pvband'; b.textContent = 'معاينة التحديث · تعرض البيانات الحقيقية ولا تحفظ أي تغيير'; document.body.appendChild(b); }
   testFab = function () { return ''; };
   loginScreen = function () {
-    const busy = CL.step === 'loading' || CL.busy;
-    return `<div class="login"><div class="lbox">
-    <div class="lhead"><img src="${LOGO}" alt="شعار المعهد العالي للفنون الموسيقية" width="84" height="80"><h1>تسجيل الدخول</h1><p>نظام الحضور والغياب</p></div>
-    ${CL.step === 'loading' ? '<p class="quiet" style="text-align:center">جارٍ تحميل البيانات…</p>' : CL.step === 'code' ? `
-      <form onsubmit="event.preventDefault();A.cloudVerify()"><p style="margin:0 0 10px">أرسلنا رسالة إلى <b dir="ltr" style="display:inline">${esc(CL.email)}</b>. افتح الرابط فيها من هذا الجهاز، أو اكتب رمز الدخول الموجود فيها.</p>
-      <div class="field"><label for="otp">رمز الدخول</label><input id="otp" inputmode="numeric" autocomplete="one-time-code" dir="ltr" maxlength="10" placeholder="••••••" style="text-align:center;letter-spacing:6px"></div>
-      ${CL.err ? `<div class="note bad">${esc(CL.err)}</div>` : ''}<button class="btn big" type="submit" id="otpbtn" ${busy ? 'disabled' : ''}>دخول</button></form>
-      <div class="row between"><button class="link" onclick="A.cloudBack()">تغيير البريد</button><button class="link quiet" onclick="A.cloudSend(true)">إعادة الإرسال</button></div>` : `
-      ${CL.mode === 'otp' ? `<form onsubmit="event.preventDefault();A.cloudSend()"><div class="field"><label for="lemail">البريد الأكاديمي</label><input id="lemail" type="email" dir="ltr" autocomplete="email" style="text-align:right" placeholder="name@${esc(CLOUD.domain || 'ma.edu.kw')}" value="${esc(CL.email)}"><small class="quiet">يصلك رابط ورمز دخول على بريدك الأكاديمي.</small></div>
-      ${CL.err ? `<div class="note bad">${esc(CL.err)}</div>` : ''}<button class="btn big" type="submit" id="sendbtn" ${busy ? 'disabled' : ''}>إرسال رمز الدخول</button></form>
-      <button class="link" onclick="CL.mode='pw';CL.err='';render()">الدخول بكلمة المرور</button>` : `<form onsubmit="event.preventDefault();A.cloudPw()"><div class="field"><label for="lemail">البريد الأكاديمي</label><input id="lemail" type="email" dir="ltr" autocomplete="username" style="text-align:right" placeholder="name@${esc(CLOUD.domain || 'ma.edu.kw')}" value="${esc(CL.email)}"></div>
-      <div class="field"><label for="lpw">كلمة المرور</label><input id="lpw" type="password" autocomplete="current-password" dir="ltr"></div>
-      ${CL.err ? `<div class="note bad">${esc(CL.err)}</div>` : ''}<button class="btn big" type="submit" id="pwbtn" ${busy ? 'disabled' : ''}>دخول</button></form>
-      <button class="link" onclick="CL.mode='otp';CL.err='';render()">الدخول برمز يصل على البريد</button>`}
-      <p class="hint">مرحلة التجربة: الدخول متاح للهيئة الإدارية والتدريسية المسجّلة في النظام.</p>`}
-    </div></div>`;
+    const busy = CL.step === 'loading' || CL.busy; const err = CL.err ? `<div class="note bad">${esc(CL.err)}</div>` : ''; const msg = CL.msg ? `<div class="note info">${esc(CL.msg)}</div>` : '';
+    const who = `<div class="note info" style="margin-bottom:10px"><b dir="ltr" style="display:inline">${esc(CL.email)}</b> · <span dir="ltr">${esc(CL.code)}</span></div>`;
+    let body;
+    if (CL.step === 'loading') body = '<p class="quiet" style="text-align:center">جارٍ تحميل البيانات…</p>';
+    else if (CL.step === 'setpw') body = `<form onsubmit="event.preventDefault();A.cloudSet()">${who}<p style="margin:0 0 10px"><b>عيّن كلمة مرور جديدة</b><br><small class="quiet">هذا أول دخول لك أو أُعيد تعيين كلمة مرورك. ستستخدمها مع بريدك ورقمك الأكاديمي في كل دخول.</small></p>
+      <div class="field"><label for="npw1">كلمة المرور الجديدة <small class="quiet">(6 أحرف على الأقل)</small></label><input id="npw1" type="password" autocomplete="new-password" dir="ltr"></div>
+      <div class="field"><label for="npw2">تأكيد كلمة المرور</label><input id="npw2" type="password" autocomplete="new-password" dir="ltr"></div>${err}
+      <button class="btn big" type="submit" id="setbtn" ${busy ? 'disabled' : ''}>حفظ والدخول</button></form><button class="link" style="margin-top:6px" onclick="A.cloudBack()">رجوع</button>`;
+    else if (CL.step === 'id') body = `<form onsubmit="event.preventDefault();A.cloudId()"><p style="margin:0 0 10px"><b>أول دخول أو بعد إعادة تعيين كلمة المرور</b><br><small class="quiet">اكتب بريدك الأكاديمي ورقمك الأكاديمي، ثم عيّن كلمة مرورك.</small></p>
+      <div class="field"><label for="lemail">البريد الأكاديمي</label><input id="lemail" type="email" dir="ltr" autocomplete="username" style="text-align:right" placeholder="name@${esc(CLOUD.domain || 'ma.edu.kw')}" value="${esc(CL.email)}"></div>
+      <div class="field"><label for="lcode">الرقم الأكاديمي</label><input id="lcode" dir="ltr" autocapitalize="characters" style="text-align:right" placeholder="مثل S2026-0001" value="${esc(CL.code || '')}"></div>${err}
+      <button class="btn big" type="submit" id="idbtn" ${busy ? 'disabled' : ''}>متابعة</button></form><button class="link" style="margin-top:6px" onclick="A.cloudBack()">رجوع للدخول بكلمة المرور</button>${msg}`;
+    else body = `<form onsubmit="event.preventDefault();A.cloudPw()"><div class="field"><label for="lemail">البريد الأكاديمي</label><input id="lemail" type="email" dir="ltr" autocomplete="username" style="text-align:right" placeholder="name@${esc(CLOUD.domain || 'ma.edu.kw')}" value="${esc(CL.email)}"></div>
+      <div class="field"><label for="lpw">كلمة المرور</label><input id="lpw" type="password" autocomplete="current-password" dir="ltr"></div>${err}
+      <button class="btn big" type="submit" id="pwbtn" ${busy ? 'disabled' : ''}>دخول</button></form>
+      <button class="btn ghost big" style="margin-top:10px" onclick="A.cloudFirst()">أول دخول؟ ادخل بالرقم الأكاديمي</button>
+      <p class="hint">نسيت كلمة المرور؟ اطلب من المدير «إعادة تعيين كلمة المرور»، ثم ادخل من زر «أول دخول».</p>${msg}`;
+    return `<div class="login"><div class="lbox"><div class="lhead"><img src="${LOGO}" alt="شعار المعهد العالي للفنون الموسيقية" width="84" height="80"><h1>تسجيل الدخول</h1><p>نظام الحضور والغياب</p></div>${body}</div></div>`;
   };
+  const netErr = (e) => /load failed|failed to fetch|network/i.test((e && e.message) || '') ? 'تعذّر الاتصال بقاعدة البيانات. افتح النظام من رابط الموقع وليس من معاينة الملفات.' : null;
+  async function finishLogin(pwSet) {
+    const { data, error } = await SB.rpc('claim_profile', { p_code: CL.code, p_password_set: !!pwSet });
+    if (error) { CL.err = netErr(error) || 'تعذّر الربط بحسابك: ' + error.message; CL.busy = false; render(); return; }
+    if (data === 'must_change') { CL.step = 'setpw'; CL.busy = false; render(); return; }
+    if (data !== 'ok') { CL.err = 'الرقم الأكاديمي لا يطابق هذا البريد.'; CL.busy = false; await SB.auth.signOut(); render(); return; }
+    CL.busy = false; const { data: s } = await SB.auth.getSession(); await cloudSession(s.session);
+  }
   Object.assign(A, {
-    async cloudPw() { const e = ((document.getElementById('lemail') || {}).value || '').trim().toLowerCase(); const pw = (document.getElementById('lpw') || {}).value || ''; CL.email = e; CL.err = '';
-      if (!e || !pw) { CL.err = 'اكتب البريد وكلمة المرور.'; render(); return; }
-      CL.busy = true; render(); const { data, error } = await SB.auth.signInWithPassword({ email: e, password: pw }); CL.busy = false;
-      if (error) { CL.err = /invalid/i.test(error.message) ? 'البريد أو كلمة المرور غير صحيحة.' : /load failed|failed to fetch|network/i.test(error.message) ? 'تعذّر الاتصال بقاعدة البيانات. افتح النظام من رابط الموقع وليس من معاينة الملفات.' : 'تعذّر الدخول: ' + error.message; render(); return; }
-      await cloudSession(data.session); },
-    async cloudSend(again) { const e = again ? CL.email : ((document.getElementById('lemail') || {}).value || '').trim().toLowerCase(); CL.email = e; CL.err = ''; CL.msg = '';
-      const dom = (CLOUD.domain || 'ma.edu.kw').toLowerCase();
-      if (!/^[^@\s]+@[^@\s]+$/.test(e)) { CL.err = 'اكتب بريدك الأكاديمي.'; render(); return; }
+    async cloudId() { const e = ((document.getElementById('lemail') || {}).value || '').trim().toLowerCase(); const c = ((document.getElementById('lcode') || {}).value || '').trim().toUpperCase();
+      CL.email = e; CL.code = c; CL.err = ''; CL.msg = ''; const dom = (CLOUD.domain || 'ma.edu.kw').toLowerCase();
+      if (!e || !c) { CL.err = 'اكتب البريد الأكاديمي والرقم الأكاديمي.'; render(); return; }
       if (dom && !e.endsWith('@' + dom)) { CL.err = 'يجب أن ينتهي البريد بـ @' + dom; render(); return; }
+      CL.busy = true; render(); const { data, error } = await SB.rpc('login_state', { p_email: e, p_code: c }); CL.busy = false;
+      if (error) { CL.err = netErr(error) || (/login_state/.test(error.message) ? 'قاعدة البيانات تحتاج التحديث update_2.sql.' : 'تعذّر التحقق: ' + error.message); render(); return; }
+      if (data === 'nomatch') { CL.err = 'البريد أو الرقم الأكاديمي غير صحيح، أو الحساب معطّل.'; render(); return; }
+      if (data === 'setup') { CL.step = 'setpw'; render(); return; } CL.step = 'pw'; CL.msg = 'حسابك مفعّل وله كلمة مرور. ادخل بالبريد وكلمة المرور.'; render(); },
+    async cloudPw() { const e = ((document.getElementById('lemail') || {}).value || '').trim().toLowerCase(); const pw = (document.getElementById('lpw') || {}).value || ''; CL.email = e; CL.err = ''; CL.msg = '';
+      if (!e || !pw) { CL.err = 'اكتب البريد الأكاديمي وكلمة المرور.'; render(); return; }
+      CL.busy = true; render(); const { error } = await SB.auth.signInWithPassword({ email: e, password: pw });
+      if (error) { CL.busy = false; CL.err = netErr(error) || (/invalid/i.test(error.message) ? 'البريد أو كلمة المرور غير صحيحة. إذا كان هذا أول دخول لك، اضغط «أول دخول».' : 'تعذّر الدخول: ' + error.message); render(); return; }
+      const { data, error: e2 } = await SB.rpc('claim_self'); CL.busy = false;
+      if (e2) { CL.err = netErr(e2) || (/claim_self/.test(e2.message) ? 'قاعدة البيانات تحتاج التحديث update_2.sql.' : 'تعذّر الدخول: ' + e2.message); await SB.auth.signOut(); render(); return; }
+      if (data === 'must_change') { await SB.auth.signOut(); CL.step = 'id'; CL.msg = 'حسابك يحتاج تعيين كلمة مرور جديدة. اكتب رقمك الأكاديمي للمتابعة.'; render(); return; }
+      if (data !== 'ok') { await SB.auth.signOut(); CL.err = data === 'nomatch' ? 'هذا البريد غير مسجّل في النظام أو الحساب معطّل.' : 'هذا الحساب مرتبط بدخول آخر. اطلب من المدير إعادة تعيين كلمة المرور.'; render(); return; }
+      const { data: s } = await SB.auth.getSession(); await cloudSession(s.session); },
+    cloudFirst() { const e = ((document.getElementById('lemail') || {}).value || '').trim().toLowerCase(); if (e) CL.email = e; CL.step = 'id'; CL.err = ''; CL.msg = ''; render(); },
+    async cloudSet() { const p1 = (document.getElementById('npw1') || {}).value || '', p2 = (document.getElementById('npw2') || {}).value || ''; CL.err = '';
+      if (p1.length < 6) { CL.err = 'كلمة المرور يجب أن تكون 6 أحرف على الأقل.'; render(); return; }
+      if (p1 !== p2) { CL.err = 'كلمتا المرور غير متطابقتين.'; render(); return; }
+      if (p1.toUpperCase() === CL.code) { CL.err = 'لا تستخدم رقمك الأكاديمي ككلمة مرور.'; render(); return; }
       CL.busy = true; render();
-      const { error } = await SB.auth.signInWithOtp({ email: e, options: { emailRedirectTo: location.origin + location.pathname, shouldCreateUser: true } });
-      CL.busy = false; if (error) { CL.err = /rate|seconds/i.test(error.message) ? 'أُرسلت رسائل كثيرة. انتظر قليلًا ثم حاول مرة أخرى.' : /not authorized/i.test(error.message) ? 'خدمة البريد المجانية في Supabase لا ترسل إلا لأعضاء فريق المشروع. استخدم الدخول بكلمة المرور.' : /load failed|failed to fetch|network/i.test(error.message) ? 'تعذّر الاتصال بقاعدة البيانات. إذا فتحت الملف من معاينة الملفات فهي تمنع الاتصال بالإنترنت: افتح النظام من رابط الموقع بعد رفعه (Netlify).' : 'تعذّر الإرسال: ' + error.message; render(); return; }
-      CL.step = 'code'; render(); },
-    async cloudVerify() { const t = ((document.getElementById('otp') || {}).value || '').replace(/\s/g, ''); if (!t) return; CL.busy = true; CL.err = ''; render();
-      const { data, error } = await SB.auth.verifyOtp({ email: CL.email, token: t, type: 'email' }); CL.busy = false;
-      if (error) { CL.err = 'الرمز غير صحيح أو منتهي.'; render(); return; } await cloudSession(data.session); },
-    cloudBack() { CL.step = 'email'; CL.err = ''; render(); },
-    logout() { UI.uid = null; UI.modal = null; UI.stack = []; CL.last = null; S = { users: [], classes: [], depts: [], sessions: [], settings: {}, records: {} }; if (SB) SB.auth.signOut(); render(); },
+      const { data, error } = await SB.rpc('reset_with_code', { p_email: CL.email, p_code: CL.code, p_password: p1 });
+      if (error) { CL.busy = false; CL.err = netErr(error) || 'تعذّر الحفظ: ' + error.message; render(); return; }
+      if (data === 'denied') { CL.busy = false; CL.err = 'لا يمكن تعيين كلمة مرور لهذا الحساب الآن. ارجع وادخل بكلمة مرورك.'; render(); return; }
+      if (data === 'nouser') { const { data: su, error: e2 } = await SB.auth.signUp({ email: CL.email, password: p1 });
+        if (e2) { CL.busy = false; CL.err = netErr(e2) || 'تعذّر إنشاء الحساب: ' + e2.message; render(); return; }
+        if (!su.session) { const r = await SB.auth.signInWithPassword({ email: CL.email, password: p1 }); if (r.error) { CL.busy = false; CL.err = 'أُنشئ الحساب لكنه يحتاج تأكيد البريد. على المدير إيقاف خيار Confirm email في Supabase (Authentication ← Sign In / Providers ← Email).'; render(); return; } } }
+      else { const r = await SB.auth.signInWithPassword({ email: CL.email, password: p1 }); if (r.error) { CL.busy = false; CL.err = 'حُفظت كلمة المرور لكن تعذّر الدخول: ' + r.error.message; render(); return; } }
+      await finishLogin(true); },
+    cloudBack() { CL.step = 'pw'; CL.err = ''; CL.msg = ''; render(); },
+    async resetPw(id) { const u = userById(id); if (!u || me().role !== 'admin') return; if (!confirm('إعادة تعيين كلمة مرور ' + u.name + '؟\nسيدخل من جديد بالبريد الأكاديمي والرقم الأكاديمي ويعيّن كلمة مرور جديدة.')) return;
+      if (CLOUD.preview) { A.toast('غير متاح في وضع المعاينة.'); return; }
+      const { error } = await SB.rpc('admin_reset', { p_id: id }); if (error) { A.toast('تعذّرت إعادة التعيين: ' + error.message); return; }
+      A.toast('أُعيد تعيين كلمة مرور ' + u.name + '. يضغط «أول دخول» ويكتب البريد ' + (u.email || '') + ' والرقم ' + u.code + ' ثم يعيّن كلمة مرور جديدة.'); },
+    logout() { UI.uid = null; UI.modal = null; UI.stack = []; CL.last = null; CL.step = 'pw'; CL.err = ''; S = { users: [], classes: [], depts: [], sessions: [], settings: {}, records: {} }; if (SB) SB.auth.signOut(); render(); },
     quick() {},
   });
   const _structure = SCREENS.structure;
@@ -2552,7 +2623,7 @@ if (CLOUD) {
     try { if (navigator.canShare && navigator.canShare({ files: [file] })) { await navigator.share({ files: [file], title: name }); return; } } catch (e) { if (e && e.name === 'AbortError') return; }
     const url = URL.createObjectURL(file); const el = document.createElement('a'); el.href = url; el.download = name; document.body.appendChild(el); el.click(); el.remove(); setTimeout(() => URL.revokeObjectURL(url), 4000);
     A.toast('تم تنزيل ' + name + '.'); };
-  A.cloudImport = function (inp) { const f = inp.files && inp.files[0]; if (!f) return; if (me().role !== 'admin') { A.toast('الاستيراد للمدير فقط.'); return; }
+  A.cloudImport = function (inp) { const f = inp.files && inp.files[0]; if (!f) return; if (me().role !== 'admin') { A.toast('الاستيراد للمدير فقط.'); return; } if (CLOUD.preview) { A.toast('الاستيراد غير متاح في وضع المعاينة.'); return; }
     const rd = new FileReader(); rd.onload = async () => { let raw; try { raw = JSON.parse(rd.result); } catch (e) { CL.imp = 'الملف ليس نسخة JSON صحيحة.'; render(); return; }
       if (!raw || !Array.isArray(raw.users) || !Array.isArray(raw.sessions)) { CL.imp = 'الملف لا يحتوي بيانات النظام.'; render(); return; }
       const myMail = (me().email || '').toLowerCase(); const st = migrate(raw) || raw; const mine = st.users.find((u) => (u.email || '').toLowerCase() === myMail);
@@ -2565,7 +2636,7 @@ if (CLOUD) {
     if (!window.supabase || !window.supabase.createClient) { CL.err = 'تعذّر تحميل مكتبة الاتصال. تحقق من الإنترنت ثم حدّث الصفحة.'; render(); return; }
     SB = window.supabase.createClient(CLOUD.url, CLOUD.key, { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true } });
     let started = false;
-    SB.auth.onAuthStateChange((ev, session) => { if (ev === 'SIGNED_IN' && !UI.uid && !started) { started = true; cloudSession(session); } if (ev === 'SIGNED_OUT') { started = false; } });
+    SB.auth.onAuthStateChange((ev) => { if (ev === 'SIGNED_OUT') { started = false; } });
     SB.auth.getSession().then(({ data }) => { if (!started) { started = !!data.session; cloudSession(data.session); } });
     document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') cloudRefresh(); });
     setInterval(() => { if (document.visibilityState === 'visible') cloudRefresh(); }, 60000);

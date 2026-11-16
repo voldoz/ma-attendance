@@ -1704,11 +1704,11 @@ function initGeoMap() {
   const g = UI.f.geo || S.settings.geo; if (!g) return;
   loadLeaflet(() => { if (!document.getElementById('gmap') || !window.L) return; const L = window.L; const r = UI.f.rad || S.settings.radius;
     if (GMAP && GMAP.el !== el) { try { GMAP.map.remove(); } catch (e) {} GMAP = null; }
-    if (!GMAP) { const map = L.map(el, { zoomControl: true, attributionControl: true }); L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© OpenStreetMap' }).addTo(map);
+    if (!GMAP) { const map = L.map(el, { zoomControl: true, attributionControl: true }).setView([g.lat, g.lng], 17); L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© OpenStreetMap' }).addTo(map);
       const mk = L.marker([g.lat, g.lng], { draggable: true }).addTo(map); const c = L.circle([g.lat, g.lng], { radius: r, color: '#24539F', weight: 2, fillColor: '#24539F', fillOpacity: 0.15 }).addTo(map);
       const move = (ll) => { UI.f.geo = { lat: +ll.lat.toFixed(6), lng: +ll.lng.toFixed(6) }; render(); };
       mk.on('dragend', () => move(mk.getLatLng())); map.on('click', (e) => move(e.latlng));
-      GMAP = { el, map, mk, c }; map.fitBounds(c.getBounds(), { padding: [24, 24] }); }
+      GMAP = { el, map, mk, c }; setTimeout(() => { try { map.invalidateSize(); map.fitBounds(c.getBounds(), { padding: [24, 24] }); } catch (e) {} }, 60); }
     else { GMAP.mk.setLatLng([g.lat, g.lng]); GMAP.c.setLatLng([g.lat, g.lng]); GMAP.c.setRadius(r); }
   });
 }

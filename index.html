@@ -852,12 +852,13 @@ function navFor(u) {
   const extra = base.filter((x) => !PERM_PAGES.some((p) => p[0] === x[0]));
   return PERM_PAGES.filter((p) => u.perms.includes(p[0])).map((p) => base.find((x) => x[0] === p[0]) || p).concat(extra);
 }
+const teachNav = (u) => (u.teaches ? [['lessons', 'حصصي', 'book'], ['myschedule', 'جدولي', 'cal']] : []);
 function navBase(u) {
   if (!u) return [];
-  if (u.role === 'admin') return [['depts', 'الأقسام', 'grid'], ['structure', 'الهيكل', 'tree'], ['schedule', 'الجداول', 'cal'], ['reports', 'التقارير', 'chart'], ['users', 'المستخدمون', 'users']];
-  if (TOP.includes(u.role)) return [['treport', 'حضور المعلمين', 'chart'], ['schedule', 'الجداول', 'cal'], ['warnings', 'الإنذارات', 'userx'], ['inbox', 'الشكاوى', 'chat']].concat(u.role === 'vdean' || u.role === 'svdean' ? [['hstudents', 'غياب الطلاب', 'userx'], ['discipline', 'التأديب', 'shield']] : []).concat(u.teaches ? [['lessons', 'حصصي', 'book']] : []);
-  if (u.role === 'head') return [['follow', 'المعلمون', 'users'], ['hstudents', 'الطلاب', 'userx'], ['schedule', 'الجداول', 'cal'], ['inbox', 'الوارد', 'chat']].concat(u.teaches ? [['lessons', 'حصصي', 'book']] : []);
-  if (u.role === 'supervisor') return [['absentees', 'الغائبون', 'userx'], ['warnings', 'الإنذارات', 'chart'], ['printc', 'الطباعة', 'print']].concat(u.teaches ? [['lessons', 'حصصي', 'book']] : []);
+  if (u.role === 'admin') return [['depts', 'الأقسام', 'grid'], ['structure', 'الهيكل', 'tree'], ['schedule', 'الجداول', 'cal'], ['reports', 'التقارير', 'chart'], ['users', 'المستخدمون', 'users']].concat(teachNav(u));
+  if (TOP.includes(u.role)) return [['treport', 'حضور المعلمين', 'chart'], ['schedule', 'الجداول', 'cal'], ['warnings', 'الإنذارات', 'userx'], ['inbox', 'الشكاوى', 'chat']].concat(u.role === 'vdean' || u.role === 'svdean' ? [['hstudents', 'غياب الطلاب', 'userx'], ['discipline', 'التأديب', 'shield']] : []).concat(teachNav(u));
+  if (u.role === 'head') return [['follow', 'المعلمون', 'users'], ['hstudents', 'الطلاب', 'userx'], ['schedule', 'الجداول', 'cal'], ['inbox', 'الوارد', 'chat']].concat(teachNav(u));
+  if (u.role === 'supervisor') return [['absentees', 'الغائبون', 'userx'], ['warnings', 'الإنذارات', 'chart'], ['printc', 'الطباعة', 'print']].concat(teachNav(u));
   if (u.role === 'teacher') return [['lessons', 'الحصص', 'book'], ['myschedule', 'جدولي', 'cal'], ['tabs', 'طلابي', 'chart'], ['files', 'الملفات', 'file'], ['notifs', 'الإشعارات', 'bell']];
   return [['mine', 'غيابي', 'chart'], ['mysched', 'جدولي', 'cal'], ['materials', 'المواد', 'book'], ['complaints', 'الشكاوى', 'chat']];
 }
